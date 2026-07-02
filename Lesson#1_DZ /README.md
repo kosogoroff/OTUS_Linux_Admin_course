@@ -1007,11 +1007,14 @@ sudo: a password is required
 kosogor@kosogor:~$ uname -r
 6.8.0-100-generic
 kosogor@kosogor:~$
+```
 
 В загрузочном меню GRUB по умолчанию теперь выбрана загрузка ОС с ядром 6.8.0-100 :
 
-<img width="1319" height="929" alt="изображение" src="https://github.com/user-attachments/assets/f4d76a79-18e1-4445-ab20-e05a860abdc0" />
-<img width="1307" height="923" alt="изображение" src="https://github.com/user-attachments/assets/77a86f71-85e1-492b-9fbf-4b5b7cddadd7" />
+<img width="1309" height="919" alt="изображение" src="https://github.com/user-attachments/assets/f291dc23-953a-4e8d-b2a3-157d6e6e7054" />
+<img width="1307" height="923" alt="изображение" src="https://github.com/user-attachments/assets/62a684b6-ee4e-483f-aa56-3ca585afe3f3" />
+
+
 
 
 
