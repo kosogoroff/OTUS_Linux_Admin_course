@@ -140,6 +140,7 @@ lrwxrwxrwx  1 root root       25 июн 25 06:31 vmlinuz.old -> vmlinuz-6.8.0-10
 <img width="1319" height="929" alt="изображение" src="https://github.com/user-attachments/assets/6236ba36-e0a0-46fb-ae03-3d3840e7d3ae" />
 
 
+
 Для обновления скачал последнюю имеющуюся версию 6.19.14:
 
 ```
@@ -249,8 +250,78 @@ kosogor@kosogor:~/kernel$
 В результате после перезагрузки на новое установленное ядро система не переключается, новое ядро
 в списке GRUB не появляется.
 
-Удалил/зачистил все установленные пакеты
+Удалил/зачистил установленные пакеты 6.19.14 , скачал и установил пакеты версии 6.18.37 - результат аналогичный:
+пакет 
 
 ```
+kosogor@kosogor:~/kernel$ sudo dpkg -i *.deb
+Выбор ранее не выбранного пакета linux-headers-6.18.37-061837.
+(Чтение базы данных … на данный момент установлено 106103 файла и каталога.)
+Подготовка к распаковке linux-headers-6.18.37-061837_6.18.37-061837.202606271054_all.deb …
+Распаковывается linux-headers-6.18.37-061837 (6.18.37-061837.202606271054) …
+Выбор ранее не выбранного пакета linux-headers-6.18.37-061837-generic.
+Подготовка к распаковке linux-headers-6.18.37-061837-generic_6.18.37-061837.202606271054_amd64.deb …
+Распаковывается linux-headers-6.18.37-061837-generic (6.18.37-061837.202606271054) …
+Выбор ранее не выбранного пакета linux-image-unsigned-6.18.37-061837-generic.
+Подготовка к распаковке linux-image-unsigned-6.18.37-061837-generic_6.18.37-061837.202606271054_amd64.deb …
+run-parts: missing operand
+Try `run-parts --help' for more information.
+dpkg: ошибка при обработке архива linux-image-unsigned-6.18.37-061837-generic_6.18.37-061837.202606271054_amd64.deb (--install):
+ подпроцесс из пакета linux-image-unsigned-6.18.37-061837-generic новый сценарий pre-installation возвратил код ошибки 1
+run-parts: missing operand
+Try `run-parts --help' for more information.
+dpkg: ошибка при очистке:
+ подпроцесс из пакета linux-image-unsigned-6.18.37-061837-generic новый сценарий post-removal возвратил код ошибки 1
+Выбор ранее не выбранного пакета linux-modules-6.18.37-061837-generic.
+Подготовка к распаковке linux-modules-6.18.37-061837-generic_6.18.37-061837.202606271054_amd64.deb …
+Распаковывается linux-modules-6.18.37-061837-generic (6.18.37-061837.202606271054) …
+Настраивается пакет linux-headers-6.18.37-061837 (6.18.37-061837.202606271054) …
+Настраивается пакет linux-headers-6.18.37-061837-generic (6.18.37-061837.202606271054) …
+Настраивается пакет linux-modules-6.18.37-061837-generic (6.18.37-061837.202606271054) …
+При обработке следующих пакетов произошли ошибки:
+ linux-image-unsigned-6.18.37-061837-generic_6.18.37-061837.202606271054_amd64.deb
+kosogor@kosogor:~/kernel$
+```
+
+Вычистил все пакеты 6.18.37 и 6.19.14 (листинг удалений длинный - приведён частично) :
 
 ```
+kosogor@kosogor:~/kernel$ sudo dpkg -P linux-headers-6.18.37-061837-generic
+(Чтение базы данных … на данный момент установлено 116817 файлов и каталогов.)
+Удаляется linux-headers-6.18.37-061837-generic (6.18.37-061837.202606271054) …
+dpkg: предупреждение: при удалении linux-headers-6.18.37-061837-generic каталог «/usr/lib/modules» не пуст, поэтому не удалён
+kosogor@kosogor:~/kernel$ sudo dpkg -P linux-headers-6.18.37-061837
+(Чтение базы данных … на данный момент установлен 105951 файл и каталог.)
+Удаляется linux-headers-6.18.37-061837 (6.18.37-061837.202606271054) …
+kosogor@kosogor:~/kernel$
+kosogor@kosogor:~/kernel$ sudo dpkg --force-all -P linux-modules-6.19.14-061914-generic
+dpkg: предупреждение: игнорируется запрос на удаление неустановленного пакета linux-modules-6.19.14-061914-generic
+kosogor@kosogor:~/kernel$
+kosogor@kosogor:~/kernel$ sudo dpkg -l | grep 6.19
+pHR linux-image-unsigned-6.19.14-061914-generic 6.19.14-061914.202604221411             amd64        (описание недоступно)
+ii  lshw                                        02.19.git.2021.06.19.996aaad9c7-2build3 amd64        information about hardware configuration
+kosogor@kosogor:~/kernel$ sudo dpkg --force-all -P linux-image-unsigned-6.19.14-061914-generic
+dpkg: предупреждение: проблема игнорируется, поскольку задан параметр --force:
+dpkg: предупреждение: пакет абсолютно неработоспособен; перед попыткой удаления
+ его следует переустановить
+(Чтение базы данных … на данный момент установлено 124943 файла и каталога.)
+Удаляется linux-image-unsigned-6.19.14-061914-generic (6.19.14-061914.202604221411) …
+kosogor@kosogor:~/kernel$ 
+kosogor@kosogor:~/kernel$ 
+kosogor@kosogor:~/kernel$ sudo dpkg -l | grep 6.19
+ii  lshw                                        02.19.git.2021.06.19.996aaad9c7-2build3 amd64        information about hardware configuration
+kosogor@kosogor:~/kernel$
+kosogor@kosogor:~/kernel$ ll /usr/lib/modules/
+total 20
+drwxr-xr-x  5 root root 4096 июл  2 08:01 ./
+drwxr-xr-x 78 root root 4096 июн 25 07:25 ../
+drwxr-xr-x  2 root root 4096 июл  2 09:00 6.18.37-061837-generic/
+drwxr-xr-x  2 root root 4096 июл  2 07:51 6.19.14-061914-generic/
+drwxr-xr-x  5 root root 4096 июн 25 06:31 6.8.0-100-generic/
+
+kosogor@kosogor:~/kernel$ sudo rm -rf /usr/lib/modules/6.18.37-061837-generic/
+kosogor@kosogor:~/kernel$ sudo rm -rf /usr/lib/modules/6.19.14-061914-generic/
+kosogor@kosogor:~/kernel$ 
+```
+
+Далее
