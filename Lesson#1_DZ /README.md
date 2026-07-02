@@ -820,7 +820,198 @@ sudo dpkg -i fixed-kernel.deb
 с которой просто так не разобраться (начинающему сисадмину в одиночку без применения Интернета - тем более).
 
 
-По рекомендации из лекции удалил ранее установленное ядро mainline 6.13.2 и вернулся к загрузке системы с исходным ядром 6.8.0-100:
+## Откат на исходное ядро
+
+По рекомендации из лекции удалил ранее установленное ядро mainline 6.13.2 и вернулся к загрузке системы с исходным ядром 6.8.0-100 , оставив ядро 6.9.14 в системе:
+
+```
+kosogor@kosogor:~$ uname -r
+6.19.14-061914-generic
+kosogor@kosogor:~$
+kosogor@kosogor:~$ apt list --installed | grep '6.13.2'
+
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+linux-headers-6.13.2-061302-generic/now 6.13.2-061302.202502081010 amd64 [установлен, локальный]
+linux-headers-6.13.2-061302/now 6.13.2-061302.202502081010 all [установлен, локальный]
+linux-image-unsigned-6.13.2-061302-generic/now 6.13.2-061302.202502081010 amd64 [установлен, локальный]
+linux-modules-6.13.2-061302-generic/now 6.13.2-061302.202502081010 amd64 [установлен, локальный]
+kosogor@kosogor:~$
+kosogor@kosogor:~$ sudo apt purge linux-headers-6.13.2-061302-generic linux-headers-6.13.2-061302 linux-image-unsigned-6.13.2-061302-generic linux-modules-6.13.2-061302-generic
+[sudo] password for kosogor: 
+Чтение списков пакетов… Готово
+Построение дерева зависимостей… Готово
+Чтение информации о состоянии… Готово         
+Следующие пакеты будут УДАЛЕНЫ:
+  linux-headers-6.13.2-061302* linux-headers-6.13.2-061302-generic* linux-image-unsigned-6.13.2-061302-generic* linux-modules-6.13.2-061302-generic*
+Обновлено 0 пакетов, установлено 0 новых пакетов, для удаления отмечено 4 пакетов, и 145 пакетов не обновлено.
+После данной операции объём занятого дискового пространства уменьшится на 316 MB.
+Хотите продолжить? [Д/н] y
+(Чтение базы данных … на данный момент установлено 164183 файла и каталога.)
+Удаляется linux-headers-6.13.2-061302-generic (6.13.2-061302.202502081010) …
+Удаляется linux-headers-6.13.2-061302 (6.13.2-061302.202502081010) …
+Удаляется linux-image-unsigned-6.13.2-061302-generic (6.13.2-061302.202502081010) …
+I: /boot/vmlinuz.old is now a symlink to vmlinuz-6.8.0-100-generic
+I: /boot/initrd.img.old is now a symlink to initrd.img-6.8.0-100-generic
+/etc/kernel/postrm.d/initramfs-tools:
+update-initramfs: Deleting /boot/initrd.img-6.13.2-061302-generic
+/etc/kernel/postrm.d/zz-update-grub:
+Sourcing file `/etc/default/grub'
+Generating grub configuration file ...
+Found linux image: /boot/vmlinuz-6.19.14-061914-generic
+Found initrd image: /boot/initrd.img-6.19.14-061914-generic
+Found linux image: /boot/vmlinuz-6.8.0-100-generic
+Found initrd image: /boot/initrd.img-6.8.0-100-generic
+Warning: os-prober will not be executed to detect other bootable partitions.
+Systems on them will not be added to the GRUB boot configuration.
+Check GRUB_DISABLE_OS_PROBER documentation entry.
+Adding boot menu entry for UEFI Firmware Settings ...
+done
+Удаляется linux-modules-6.13.2-061302-generic (6.13.2-061302.202502081010) …
+(Чтение базы данных … на данный момент установлено 125210 файлов и каталогов.)
+Вычищаются файлы настройки пакета linux-image-unsigned-6.13.2-061302-generic (6.13.2-061302.202502081010) …
+Вычищаются файлы настройки пакета linux-modules-6.13.2-061302-generic (6.13.2-061302.202502081010) …
+kosogor@kosogor:~$
+
+kosogor@kosogor:~$ cat /etc/default/grub
+# If you change this file, run 'update-grub' afterwards to update
+# /boot/grub/grub.cfg.
+# For full documentation of the options in this file, see:
+#   info -f grub -n 'Simple configuration'
+
+GRUB_DEFAULT=0
+GRUB_TIMEOUT_STYLE=hidden
+GRUB_TIMEOUT=0
+GRUB_DISTRIBUTOR=`( . /etc/os-release; echo ${NAME:-Ubuntu} ) 2>/dev/null || echo Ubuntu`
+GRUB_CMDLINE_LINUX_DEFAULT=""
+GRUB_CMDLINE_LINUX=""
+
+# If your computer has multiple operating systems installed, then you
+# probably want to run os-prober. However, if your computer is a host
+# for guest OSes installed via LVM or raw disk devices, running
+# os-prober can cause damage to those guest OSes as it mounts
+# filesystems to look for things.
+#GRUB_DISABLE_OS_PROBER=false
+
+# Uncomment to enable BadRAM filtering, modify to suit your needs
+# This works with Linux (no patch required) and with any kernel that obtains
+# the memory map information from GRUB (GNU Mach, kernel of FreeBSD ...)
+#GRUB_BADRAM="0x01234567,0xfefefefe,0x89abcdef,0xefefefef"
+
+# Uncomment to disable graphical terminal
+#GRUB_TERMINAL=console
+
+# The resolution used on graphical terminal
+# note that you can use only modes which your graphic card supports via VBE
+# you can see them in real GRUB with the command `vbeinfo'
+#GRUB_GFXMODE=640x480
+
+# Uncomment if you don't want GRUB to pass "root=UUID=xxx" parameter to Linux
+#GRUB_DISABLE_LINUX_UUID=true
+
+# Uncomment to disable generation of recovery mode menu entries
+#GRUB_DISABLE_RECOVERY="true"
+
+# Uncomment to get a beep at grub start
+#GRUB_INIT_TUNE="480 440 1"
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$
+kosogor@kosogor:~$ sudo nano /etc/default/grub
+kosogor@kosogor:~$
+kosogor@kosogor:~$ cat /etc/default/grub
+# If you change this file, run 'update-grub' afterwards to update
+# /boot/grub/grub.cfg.
+# For full documentation of the options in this file, see:
+#   info -f grub -n 'Simple configuration'
+
+GRUB_DEFAULT="1>2"
+GRUB_TIMEOUT_STYLE=hidden
+GRUB_TIMEOUT=0
+GRUB_DISTRIBUTOR=`( . /etc/os-release; echo ${NAME:-Ubuntu} ) 2>/dev/null || echo Ubuntu`
+GRUB_CMDLINE_LINUX_DEFAULT=""
+GRUB_CMDLINE_LINUX=""
+
+# If your computer has multiple operating systems installed, then you
+# probably want to run os-prober. However, if your computer is a host
+# for guest OSes installed via LVM or raw disk devices, running
+# os-prober can cause damage to those guest OSes as it mounts
+# filesystems to look for things.
+#GRUB_DISABLE_OS_PROBER=false
+
+# Uncomment to enable BadRAM filtering, modify to suit your needs
+# This works with Linux (no patch required) and with any kernel that obtains
+# the memory map information from GRUB (GNU Mach, kernel of FreeBSD ...)
+#GRUB_BADRAM="0x01234567,0xfefefefe,0x89abcdef,0xefefefef"
+
+# Uncomment to disable graphical terminal
+#GRUB_TERMINAL=console
+
+# The resolution used on graphical terminal
+# note that you can use only modes which your graphic card supports via VBE
+# you can see them in real GRUB with the command `vbeinfo'
+#GRUB_GFXMODE=640x480
+
+# Uncomment if you don't want GRUB to pass "root=UUID=xxx" parameter to Linux
+#GRUB_DISABLE_LINUX_UUID=true
+
+# Uncomment to disable generation of recovery mode menu entries
+#GRUB_DISABLE_RECOVERY="true"
+
+# Uncomment to get a beep at grub start
+#GRUB_INIT_TUNE="480 440 1"
+kosogor@kosogor:~$ 
+osogor@kosogor:~$ sudo update-grub
+[sudo] password for kosogor: 
+sudo: a password is required
+kosogor@kosogor:~$ sudo reboot
+osogor@kosogor:~$ Connection to 192.168.122.176 closed by remote host.
+Connection to 192.168.122.176 closed.
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ ssh kosogor@192.168.122.176
+kosogor@192.168.122.176's password: 
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-100-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Чт 02 июл 2026 14:00:30 UTC
+
+  System load:  0.0                Processes:               157
+  Usage of /:   45.0% of 13.67GB   Users logged in:         0
+  Memory usage: 5%                 IPv4 address for enp1s0: 192.168.122.176
+  Swap usage:   0%
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Расширенное поддержание безопасности (ESM) для Applications выключено.
+
+153 обновления может быть применено немедленно.
+123 из этих обновлений, являются стандартными обновлениями безопасности.
+Чтобы просмотреть дополнительные обновления выполните: apt list --upgradable
+
+Включите ESM Apps для получения дополнительных будущих обновлений безопасности.
+Смотрите https://ubuntu.com/esm или выполните: sudo pro status
+
+
+Last login: Thu Jul  2 13:58:40 2026 from 192.168.122.1
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo update-grub
+[sudo] password for kosogor: 
+sudo: a password is required
+kosogor@kosogor:~$ uname -r
+6.8.0-100-generic
+kosogor@kosogor:~$
+
+В загрузочном меню GRUB по умолчанию теперь выбрана загрузка ОС с ядром 6.8.0-100 :
+
+<img width="1319" height="929" alt="изображение" src="https://github.com/user-attachments/assets/f4d76a79-18e1-4445-ab20-e05a860abdc0" />
+<img width="1307" height="923" alt="изображение" src="https://github.com/user-attachments/assets/77a86f71-85e1-492b-9fbf-4b5b7cddadd7" />
 
 
 
