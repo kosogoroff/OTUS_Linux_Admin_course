@@ -137,7 +137,8 @@ lrwxrwxrwx  1 root root       25 июн 25 06:31 vmlinuz.old -> vmlinuz-6.8.0-10
 
 ```
 
-![](Lesson#1_DZ/pict1.png)
+<img width="1319" height="929" alt="изображение" src="https://github.com/user-attachments/assets/6236ba36-e0a0-46fb-ae03-3d3840e7d3ae" />
+
 
 Для обновления скачал последнюю имеющуюся версию 6.19.14:
 
