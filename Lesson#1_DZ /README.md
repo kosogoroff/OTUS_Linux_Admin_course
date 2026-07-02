@@ -28,6 +28,23 @@ virsh -V
 
 Для установки скачан рекомендованный дистрибутив ubuntu-24.04.4-live-server-amd64.iso  с сайта https://releases.ubuntu.com/24.04/
 
+Оказалось, что после установки чистой ОС 24.04 в ВМ не работает менеджер пакетов apt , хотя интернет
+есть:
+
+```
+osogor@kosogor:~$ ping archive.ubuntu.com
+PING archive.ubuntu.com.cdn.cloudflare.net (104.20.28.246) 56(84) bytes of data.
+64 bytes from 104.20.28.246: icmp_seq=1 ttl=50 time=114 ms
+64 bytes from 104.20.28.246: icmp_seq=2 ttl=50 time=115 ms
+64 bytes from 104.20.28.246: icmp_seq=3 ttl=50 time=116 ms
+64 bytes from 104.20.28.246: icmp_seq=4 ttl=50 time=115 ms
+^C
+--- archive.ubuntu.com.cdn.cloudflare.net ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 114.348/115.140/115.757/0.516 ms
+kosogor@kosogor:~$ 
+```
+
 *Суть ошибки:* после установки чистой ОС с образа в ней не работает обновление:
 команда 'sudo apt update' , а также другие команды установки пакетов возвращают ошибку:
 
