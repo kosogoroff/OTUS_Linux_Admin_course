@@ -774,3 +774,380 @@ vdg                       253:96   0  100M  0 disk  linux_raid_member
   └─md0p5                 259:9    0 58,5M  0 part  ext4              /raid/part5
 kosogor@kosogor:~$ 
 ```
+
+## 5. После перезагрузки ВМ/сервера Ubuntu 24.04 созданный RAID-массив /dev/md0 переименовывается в /dev/md127 
+
+Оказалось, что после перезагрузки ВМ.сервера Ubuntu 24.04 созданный RAID-массив /dev/md0 переименовывается в /dev/md127
+
+```
+kosogor@kosogor:~$ lsblk
+NAME                      MAJ:MIN RM  SIZE RO TYPE  MOUNTPOINTS
+sr0                        11:0    1  3,2G  0 rom   
+vda                       253:0    0   30G  0 disk  
+├─vda1                    253:1    0    1M  0 part  
+├─vda2                    253:2    0    2G  0 part  /boot
+└─vda3                    253:3    0   28G  0 part  
+  └─ubuntu--vg-ubuntu--lv 252:0    0   14G  0 lvm   /
+vdb                       253:16   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vdc                       253:32   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vdd                       253:48   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vde                       253:64   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vdf                       253:80   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo reboot
+
+Broadcast message from root@kosogor on pts/1 (Tue 2026-07-14 07:51:05 UTC):
+
+The system will reboot now!
+
+kosogor@kosogor:~$ Connection to 192.168.122.176 closed by remote host.
+Connection to 192.168.122.176 closed.
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ ssh kosogor@192.168.122.176
+kosogor@192.168.122.176's password: 
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-134-generic x86_64)
+
+Last login: Tue Jul 14 07:43:43 2026 from 192.168.122.1
+kosogor@kosogor:~$ lsblk
+NAME                      MAJ:MIN RM  SIZE RO TYPE  MOUNTPOINTS
+sr0                        11:0    1  3,2G  0 rom   
+vda                       253:0    0   30G  0 disk  
+├─vda1                    253:1    0    1M  0 part  
+├─vda2                    253:2    0    2G  0 part  /boot
+└─vda3                    253:3    0   28G  0 part  
+  └─ubuntu--vg-ubuntu--lv 252:0    0   14G  0 lvm   /
+vdb                       253:16   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+vdc                       253:32   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+vdd                       253:48   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+vde                       253:64   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+vdf                       253:80   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+kosogor@kosogor:~$ 
+```
+
+Это можно исправить, вручную пересобрав массив следующими командами: 
+
+```
+mdadm -S /dev/md127
+mdadm -As
+mount -a
+```
+
+Но после следующей перезагрузки RAID-массив опять переименовывается.
+
+Рекомендованное в Интернете решение
+```
+После сборки RAID-массива сделать добавить строку его конфигурации в файл /etc/mdadm/mdadm.conf :
+
+mdadm --examine --scan >> /etc/mdadm/mdadm.conf
+```
+не помогло, после перезагрузки RAID-массив опять переименовывается:
+
+```
+kosogor@kosogor:~$ sudo cat /etc/mdadm/mdadm.conf
+# mdadm.conf
+#
+# !NB! Run update-initramfs -u after updating this file.
+# !NB! This will ensure that initramfs has an uptodate copy.
+#
+# Please refer to mdadm.conf(5) for information about this file.
+#
+
+# by default (built-in), scan all partitions (/proc/partitions) and all
+# containers for MD superblocks. alternatively, specify devices to scan, using
+# wildcards if desired.
+#DEVICE partitions containers
+
+# automatically tag new arrays as belonging to the local system
+HOMEHOST <system>
+
+# instruct the monitoring daemon where to send mail alerts
+MAILADDR root
+
+# definitions of existing MD arrays
+
+# This configuration was auto-generated on Tue, 10 Feb 2026 00:26:20 +0000 by mkconf
+ARRAY /dev/md0  metadata=1.2 UUID=40aaa16a:a9941f73:1f4ff687:70e39a45
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo reboot
+
+Broadcast message from root@kosogor on pts/1 (Tue 2026-07-14 07:55:06 UTC):
+
+The system will reboot now!
+
+kosogor@kosogor:~$ Connection to 192.168.122.176 closed by remote host.
+Connection to 192.168.122.176 closed.
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ ssh kosogor@192.168.122.176
+kosogor@192.168.122.176's password: 
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-134-generic x86_64)
+
+Last login: Tue Jul 14 07:51:21 2026 from 192.168.122.1
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ lsblk
+NAME                      MAJ:MIN RM  SIZE RO TYPE  MOUNTPOINTS
+sr0                        11:0    1  3,2G  0 rom   
+vda                       253:0    0   30G  0 disk  
+├─vda1                    253:1    0    1M  0 part  
+├─vda2                    253:2    0    2G  0 part  /boot
+└─vda3                    253:3    0   28G  0 part  
+  └─ubuntu--vg-ubuntu--lv 252:0    0   14G  0 lvm   /
+vdb                       253:16   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+vdc                       253:32   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+vdd                       253:48   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+vde                       253:64   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+vdf                       253:80   0  100M  0 disk  
+└─md127                     9:127  0  294M  0 raid6 
+  ├─md127p1               259:0    0 58,8M  0 part  
+  ├─md127p2               259:1    0   57M  0 part  
+  ├─md127p3               259:2    0   60M  0 part  
+  ├─md127p4               259:3    0 58,5M  0 part  
+  └─md127p5               259:4    0 58,5M  0 part  
+kosogor@kosogor:~$
+```
+
+Пишут, что файл /etc/mdadm/mdadm.conf имеет второстепенное значение.
+
+
+Рекомендованное в Интернете решение
+
+```
+В initramfs используется свой mdadm.conf , который не содержит явного определения вашего массива, система может
+пересобрать его заново с новой нумерацией. Нужно после сборки массива обновить initramfs командой
+
+update-initramfs -u
+```
+
+помогло.
+
+
+После обновления initramfs (причём именно в нужном ядре 6.8.0-100, с которым запускается система) RAID-массив /dev/md0 
+перестал переименовываться после ребута:
+
+```
+kosogor@kosogor:~$ sudo cat /etc/mdadm/mdadm.conf
+# mdadm.conf
+#
+# !NB! Run update-initramfs -u after updating this file.
+# !NB! This will ensure that initramfs has an uptodate copy.
+#
+# Please refer to mdadm.conf(5) for information about this file.
+#
+
+# by default (built-in), scan all partitions (/proc/partitions) and all
+# containers for MD superblocks. alternatively, specify devices to scan, using
+# wildcards if desired.
+#DEVICE partitions containers
+
+# automatically tag new arrays as belonging to the local system
+HOMEHOST <system>
+
+# instruct the monitoring daemon where to send mail alerts
+MAILADDR root
+
+# definitions of existing MD arrays
+
+# This configuration was auto-generated on Tue, 10 Feb 2026 00:26:20 +0000 by mkconf
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo mdadm -S /dev/md127
+mdadm: stopped /dev/md127
+kosogor@kosogor:~$ sudo mdadm -As
+mdadm: /dev/md/0 has been started with 5 drives.
+kosogor@kosogor:~$ sudo mount -a
+kosogor@kosogor:~$ lsblk
+NAME                      MAJ:MIN RM  SIZE RO TYPE  MOUNTPOINTS
+sr0                        11:0    1  3,2G  0 rom   
+vda                       253:0    0   30G  0 disk  
+├─vda1                    253:1    0    1M  0 part  
+├─vda2                    253:2    0    2G  0 part  /boot
+└─vda3                    253:3    0   28G  0 part  
+  └─ubuntu--vg-ubuntu--lv 252:0    0   14G  0 lvm   /
+vdb                       253:16   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vdc                       253:32   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vdd                       253:48   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vde                       253:64   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vdf                       253:80   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+kosogor@kosogor:~$ sudo update-initramfs -u
+update-initramfs: Generating /boot/initrd.img-6.19.14-061914-generic
+kosogor@kosogor:~$ uname -r
+6.8.0-134-generic
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo update-initramfs -u -k 6.8.0-134-generic
+update-initramfs: Generating /boot/initrd.img-6.8.0-134-generic
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo reboot
+
+Broadcast message from root@kosogor on pts/1 (Tue 2026-07-14 08:04:27 UTC):
+
+The system will reboot now!
+
+kosogor@kosogor:~$ Connection to 192.168.122.176 closed by remote host.
+Connection to 192.168.122.176 closed.
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ ssh kosogor@192.168.122.176
+kosogor@192.168.122.176's password: 
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-134-generic x86_64)
+
+Last login: Tue Jul 14 07:55:21 2026 from 192.168.122.1
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ lsblk
+NAME                      MAJ:MIN RM  SIZE RO TYPE  MOUNTPOINTS
+sr0                        11:0    1  3,2G  0 rom   
+vda                       253:0    0   30G  0 disk  
+├─vda1                    253:1    0    1M  0 part  
+├─vda2                    253:2    0    2G  0 part  /boot
+└─vda3                    253:3    0   28G  0 part  
+  └─ubuntu--vg-ubuntu--lv 252:0    0   14G  0 lvm   /
+vdb                       253:16   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vdc                       253:32   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vdd                       253:48   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vde                       253:64   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+vdf                       253:80   0  100M  0 disk  
+└─md0                       9:0    0  294M  0 raid6 
+  ├─md0p1                 259:0    0 58,8M  0 part  
+  ├─md0p2                 259:1    0   57M  0 part  
+  ├─md0p3                 259:2    0   60M  0 part  
+  ├─md0p4                 259:3    0 58,5M  0 part  
+  └─md0p5                 259:4    0 58,5M  0 part  
+kosogor@kosogor:~$
+```
