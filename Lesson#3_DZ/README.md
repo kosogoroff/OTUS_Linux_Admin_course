@@ -475,7 +475,9 @@ root@kosogor:/home/kosogor#
 имеющихся ядрах и перегружаем сервер. 
 3. Но перед перезагрузкой сервера сразу же создаём группу томов из дисков vdc и vdd и новый
 логический том с зеркалом для переноса на него данных /var (Примечание: пришлось увеличить размер диска vdd в KVM с 1G до 2G,
-иначе зеркало создавалось недостаточного размера для копирования всех данных из директории /var, размер которых был 1,2G) :
+иначе зеркало создавалось недостаточного размера для копирования всех данных из директории /var, размер которых был 1,2G),
+конфигурируем в /etc/fstab для автоматического монтирования. После перезагрузки директория /var
+автоматически монтируется:
 
 ```
 root@kosogor:/home/kosogor# 
@@ -573,7 +575,6 @@ Creating journal (4096 blocks): done
 Writing superblocks and filesystem accounting information: done
 
 root@kosogor:/# 
-root@kosogor:/# 
 root@kosogor:/# mount /dev/vg_var/lv_var /mnt
 root@kosogor:/# 
 root@kosogor:/# mount /dev/vg_var/lv_var /mnt
@@ -587,7 +588,6 @@ tmpfs                             tmpfs  392M  1,2M  391M   1% /run
 root@kosogor:/# 
 root@kosogor:/# cp -aR /var/* /mnt/
 root@kosogor:/# 
-root@kosogor:/# 
 root@kosogor:/# df -hT
 Filesystem                        Type   Size  Used Avail Use% Mounted on
 /dev/mapper/ubuntu--vg-ubuntu--lv ext4   7,8G  7,1G  316M  96% /
@@ -599,7 +599,6 @@ root@kosogor:/# du -sh /var/
 1,2G	/var/
 root@kosogor:/# du -sh /mnt/
 1,2G	/mnt/
-root@kosogor:/# 
 root@kosogor:/# 
 root@kosogor:/# cat /etc/fstab
 # /etc/fstab: static file system information.
@@ -735,7 +734,9 @@ root@kosogor:/home/kosogor# vgs
 root@kosogor:/home/kosogor# 
 ```
 
-2. Далее выделяем логический том под /home (аналогично как делали для /var , но без зеркала) :
+2. Далее выделяем логический том под /home (аналогично как делали для /var , но без зеркала), также
+конфигурируем в /etc/fstab для автоматического монтирования. После перезагрузки директория /home
+автоматически монтируется :
 
 ```
 root@kosogor:/home/kosogor# lvcreate -n LogVol_Home -L 2G /dev/ubuntu-vg
@@ -826,4 +827,123 @@ tmpfs                              tmpfs  5,0M     0  5,0M   0% /run/lock
 /dev/vda2                          ext4   2,0G  334M  1,5G  19% /boot
 tmpfs                              tmpfs  392M   12K  392M   1% /run/user/1000
 root@kosogor:/home/kosogor#
+```
+
+## 6. Работа со снапшотами:
+    - сгенерить файлы в /home/;
+    - снять снапшот;
+    - удалить часть файлов;
+    - восстановиться со снапшота :
+
+```
+root@kosogor:/home/kosogor# ll /home
+total 28
+drwxr-xr-x  4 root    root     4096 июл 18 18:39 ./
+drwxr-xr-x 26 root    root     4096 июл 18 16:37 ../
+drwxr-x---  5 kosogor kosogor  4096 июл 14 08:03 kosogor/
+drwx------  2 root    root    16384 июл 18 18:38 lost+found/
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# touch /home/file{1..20}
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# ll /home
+total 28
+drwxr-xr-x  4 root    root     4096 июл 18 19:10 ./
+drwxr-xr-x 26 root    root     4096 июл 18 16:37 ../
+-rw-r--r--  1 root    root        0 июл 18 19:10 file1
+-rw-r--r--  1 root    root        0 июл 18 19:10 file10
+-rw-r--r--  1 root    root        0 июл 18 19:10 file11
+-rw-r--r--  1 root    root        0 июл 18 19:10 file12
+-rw-r--r--  1 root    root        0 июл 18 19:10 file13
+-rw-r--r--  1 root    root        0 июл 18 19:10 file14
+-rw-r--r--  1 root    root        0 июл 18 19:10 file15
+-rw-r--r--  1 root    root        0 июл 18 19:10 file16
+-rw-r--r--  1 root    root        0 июл 18 19:10 file17
+-rw-r--r--  1 root    root        0 июл 18 19:10 file18
+-rw-r--r--  1 root    root        0 июл 18 19:10 file19
+-rw-r--r--  1 root    root        0 июл 18 19:10 file2
+-rw-r--r--  1 root    root        0 июл 18 19:10 file20
+-rw-r--r--  1 root    root        0 июл 18 19:10 file3
+-rw-r--r--  1 root    root        0 июл 18 19:10 file4
+-rw-r--r--  1 root    root        0 июл 18 19:10 file5
+-rw-r--r--  1 root    root        0 июл 18 19:10 file6
+-rw-r--r--  1 root    root        0 июл 18 19:10 file7
+-rw-r--r--  1 root    root        0 июл 18 19:10 file8
+-rw-r--r--  1 root    root        0 июл 18 19:10 file9
+drwxr-x---  5 kosogor kosogor  4096 июл 14 08:03 kosogor/
+drwx------  2 root    root    16384 июл 18 18:38 lost+found/
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# lvs
+  LV          VG        Attr       LSize Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  LogVol_Home ubuntu-vg -wi-ao---- 2,00g                                                    
+  ubuntu-lv   ubuntu-vg -wi-ao---- 8,00g                                                    
+  lv_var      vg_var    -wi-ao---- 1,50g                                                    
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# lvcreate -L 100MB -s -n home_snap /dev/ubuntu-vg/LogVol_Home
+  Logical volume "home_snap" created.
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# lvs
+  LV          VG        Attr       LSize   Pool Origin      Data%  Meta%  Move Log Cpy%Sync Convert
+  LogVol_Home ubuntu-vg owi-aos---   2,00g                                                         
+  home_snap   ubuntu-vg swi-a-s--- 100,00m      LogVol_Home 0,01                                   
+  ubuntu-lv   ubuntu-vg -wi-ao----   8,00g                                                         
+  lv_var      vg_var    -wi-ao----   1,50g                                                         
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# rm -f /home/file{11..20}
+root@kosogor:/home/kosogor# 
+root@kosogor:/home/kosogor# ll /home
+total 28
+drwxr-xr-x  4 root    root     4096 июл 18 19:11 ./
+drwxr-xr-x 26 root    root     4096 июл 18 16:37 ../
+-rw-r--r--  1 root    root        0 июл 18 19:10 file1
+-rw-r--r--  1 root    root        0 июл 18 19:10 file10
+-rw-r--r--  1 root    root        0 июл 18 19:10 file2
+-rw-r--r--  1 root    root        0 июл 18 19:10 file3
+-rw-r--r--  1 root    root        0 июл 18 19:10 file4
+-rw-r--r--  1 root    root        0 июл 18 19:10 file5
+-rw-r--r--  1 root    root        0 июл 18 19:10 file6
+-rw-r--r--  1 root    root        0 июл 18 19:10 file7
+-rw-r--r--  1 root    root        0 июл 18 19:10 file8
+-rw-r--r--  1 root    root        0 июл 18 19:10 file9
+drwxr-x---  5 kosogor kosogor  4096 июл 14 08:03 kosogor/
+drwx------  2 root    root    16384 июл 18 18:38 lost+found/
+root@kosogor:/home/kosogor# 
+root@kosogor:/# 
+root@kosogor:/# umount /home
+root@kosogor:/# lvconvert --merge /dev/ubuntu-vg/home_snap
+  Merging of volume ubuntu-vg/home_snap started.
+  ubuntu-vg/LogVol_Home: Merged: 100,00%
+root@kosogor:/# 
+root@kosogor:/# mount /dev/mapper/ubuntu--vg-LogVol_Home /home
+root@kosogor:/# 
+root@kosogor:/# ls -al /home
+total 28
+drwxr-xr-x  4 root    root     4096 июл 18 19:10 .
+drwxr-xr-x 26 root    root     4096 июл 18 16:37 ..
+-rw-r--r--  1 root    root        0 июл 18 19:10 file1
+-rw-r--r--  1 root    root        0 июл 18 19:10 file10
+-rw-r--r--  1 root    root        0 июл 18 19:10 file11
+-rw-r--r--  1 root    root        0 июл 18 19:10 file12
+-rw-r--r--  1 root    root        0 июл 18 19:10 file13
+-rw-r--r--  1 root    root        0 июл 18 19:10 file14
+-rw-r--r--  1 root    root        0 июл 18 19:10 file15
+-rw-r--r--  1 root    root        0 июл 18 19:10 file16
+-rw-r--r--  1 root    root        0 июл 18 19:10 file17
+-rw-r--r--  1 root    root        0 июл 18 19:10 file18
+-rw-r--r--  1 root    root        0 июл 18 19:10 file19
+-rw-r--r--  1 root    root        0 июл 18 19:10 file2
+-rw-r--r--  1 root    root        0 июл 18 19:10 file20
+-rw-r--r--  1 root    root        0 июл 18 19:10 file3
+-rw-r--r--  1 root    root        0 июл 18 19:10 file4
+-rw-r--r--  1 root    root        0 июл 18 19:10 file5
+-rw-r--r--  1 root    root        0 июл 18 19:10 file6
+-rw-r--r--  1 root    root        0 июл 18 19:10 file7
+-rw-r--r--  1 root    root        0 июл 18 19:10 file8
+-rw-r--r--  1 root    root        0 июл 18 19:10 file9
+drwxr-x---  5 kosogor kosogor  4096 июл 14 08:03 kosogor
+drwx------  2 root    root    16384 июл 18 18:38 lost+found
+root@kosogor:/# 
 ```
