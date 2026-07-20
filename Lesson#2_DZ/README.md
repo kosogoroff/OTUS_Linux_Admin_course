@@ -1002,6 +1002,12 @@ kosogor@kosogor:~$
 пересобрать его заново с новой нумерацией. Нужно после сборки массива обновить initramfs командой
 
 update-initramfs -u
+
+
+Если update-initramfs в системе нету, то можно сделать :
+
+mkinitrd -f -v /boot/initrd-$(uname -r).img $(uname -r)
+
 ```
 
 помогло.
