@@ -606,3 +606,462 @@ drwxr-xr-x 3 nobody  nogroup 4096 июл 23 08:31 ../
 -rw-rw-r-- 1 kosogor kosogor    0 июл 23 09:03 final_check
 root@vm1-server:/home/kosogor# 
 ```
+
+## 5. Создание двух скриптов для автоматизированного экспортирования директорий NFS на сервере и автоматизированного монтирования директорий NFS на клиенте
+
+Далее необходимо создать два bash-скрипта:
+- nfss_script.sh — для конфигурирования сервера
+- nfsc_script.sh — для конфигурирования клиента, в которых описать bash-командами ранее выполненные шаги.
+
+### 1) Созданные скрипты:
+
+на сервере:
+
+```
+$ cat nfss_script.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "Ошибка: неверный формат аргументов." >&2
+  echo "Использование: $0 {-a|-d} <директория для экспортирования> [<client_ip_address/mask>]" >&2
+  echo "  -a  — добавить экспорт директории по NFS" >&2
+  echo "  -d  — удалить экспорт директории по NFS" >&2
+  exit 1
+}
+
+check_directory() {
+  local path="${export_dir}"
+  local dirpath
+
+  dirpath="$(dirname -- "${path}")"
+
+  if [[ ! -d "${dirpath}" ]]; then
+    echo "Директория не существует: ${dirpath}" >&2
+    return 1
+  else
+    echo "Директория существует: ${dirpath}"
+    return 0
+  fi
+}
+
+# проверяем, что скрипт выполняется с правами root
+if [[ $EUID -ne 0 ]]; then
+  echo "Error: скрипт нужно запускать от root (например, через sudo)" >&2
+  exit 1
+fi
+
+# Проверка количества аргументов
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  usage
+fi
+
+action="$1"
+export_dir="$2"
+ip_addr="${3:-*}"
+server_ip=192.168.122.176
+
+# Валидация первого аргумента
+case "$action" in
+  -a)
+    # Сначала создаем и проверяем директорию
+    mkdir -p $export_dir
+    chown -R nobody:nogroup $export_dir
+    chmod 0777 $export_dir
+
+    if ! check_directory "${export_dir}"; then
+       echo "Not added to NFS exports !"
+       exit 1
+    fi
+
+    echo "Adding directory $export_dir to /etc/exports ..."
+
+    # Сначала удаляем существующий экспорт этой директории, если он уже есть
+    sed -i "\|${export_dir}|d" /etc/exports
+
+    # Добавляем в файл /etc/exports
+    cat << EOF >> /etc/exports
+$export_dir ${ip_addr}(rw,sync,root_squash)
+EOF
+
+    # обновляем экспортируемые директории
+    exportfs -r > /dev/null 2>&1
+   
+    # и выводим результаты
+    echo
+    echo "The following share added to NFS server configuration:"
+    exportfs -s | grep ${export_dir}
+    ;;
+  -d)
+    echo "Deletting directory $export_dir from /etc/exports ..."
+    sed -i "\|${export_dir} |d" /etc/exports
+
+    # обновляем экспортируемые директории
+    exportfs -r > /dev/null 2>&1
+
+    echo "Deleted ${export_dir}"
+    ;;
+  *)
+    usage
+    ;;
+esac
+
+# и выводим результаты
+
+    echo
+    echo "Available shared directories on the NFS server $server_ip :"
+    showmount -e $server_ip
+
+
+
+kosogor@vm1-server:~$
+```
+
+На клиенте:
+
+```
+kosogor@vm2-client:~$ cat nfsc_script.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "Ошибка: неверный формат аргументов." >&2
+  echo "Использование: $0 {-a|-d} <IP-адрес сервера NFS> <директория NFS-сервера> <точка_монтирования>" >&2
+  echo "  -a  — примонтировать директорию сервера по NFS" >&2
+  echo "  -d  — удалить монтирование директории по NFS" >&2
+  exit 1
+}
+
+check_directory() {
+  local path="${mount_point}"
+  local dirpath
+
+  dirpath="$(dirname -- "${path}")"
+
+  if [[ ! -d "${dirpath}" ]]; then
+    echo "Директория не существует: ${dirpath}" >&2
+    return 1
+  else
+    return 0
+  fi
+}
+
+# проверяем, что скрипт выполняется с правами root
+if [[ $EUID -ne 0 ]]; then
+  echo "Error: скрипт нужно запускать от root (например, через sudo)" >&2
+  exit 1
+fi
+
+# Проверка количества аргументов
+if [[ $# -ne 4 ]]; then
+  usage
+fi
+
+action="$1"
+export_dir="$3"
+server_ip="$2"
+mount_point="$4"
+
+# Валидация первого аргумента
+case "$action" in
+  -a)
+    # Сначала создаем и проверяем точку монтирования
+    mkdir -p $mount_point
+
+    if ! check_directory "${mount_point}"; then
+       echo "Mount-point directory cannot be created !"
+       exit 1
+    fi
+
+    # Проверяем наличие NFS mount на сервере
+    if [[ $(showmount -e ${server_ip} | grep "${export_dir}") == "" ]]; then 
+       echo "Error: На сервере ${server_ip} отсутствует NFS директория ${export_dir} !"; 
+       echo
+       echo "На сервере ${server_ip} имеются следующие NFS директории, доступные для монтирования :"
+       showmount -e ${server_ip}
+       exit 1
+    fi
+
+    
+    echo "Монтируем NFS-директорию $export_dir в ${mount_point} ..."
+   # umount ${mount_point} > /dev/null 2>&1
+    mount -t nfs ${server_ip}:${export_dir} ${mount_point}
+
+    # добавляем в /etc/fstab
+    sed -i "\|${server_ip}:${export_dir} ${mount_point} |d" /etc/fstab
+    echo "${server_ip}:${export_dir} ${mount_point} nfs vers=3,noauto,x-systemd.automount 0 0" >> /etc/fstab
+   
+    systemctl daemon-reload
+    systemctl restart remote-fs.target
+    # и выводим результаты
+    echo
+    echo "Примонтирована NFS директория :"
+    mount -l | grep ${export_dir}
+    echo
+    echo "В файле /etc/fstab :"
+    cat /etc/fstab | grep ${export_dir}
+    ;;
+  -d)
+    echo "Отмонтирование NFS директории $export_dir ..."
+    sed -i "\|${server_ip}:${export_dir} ${mount_point} |d" /etc/fstab
+    systemctl daemon-reload
+    systemctl restart remote-fs.target
+    umount ${mount_point} > /dev/null 2>&1
+
+    echo "Отмонтирована ${export_dir}"
+    ;;
+  *)
+    usage
+    ;;
+esac
+```
+
+### 2) Проверяем работу созданных скриптов
+
+На сервере NFS создаём и экспортируем скриптом две директории - на клиенте они становятся видны.
+Затем вторым скриптом монтируем эти две директории на клиентской машине.
+Далее в каждой из подмонтированных директорий создаём по два файла: один со стороны клиента, 
+второй со стороны сервера. Проверяем, что оба файла видны и на клиенте, и на сервере.
+Наконец, отмонтируем директории на клиенте тем же скриптом и удаляем экспорт директорий на сервере тем же скриптом.
+
+Экспортируем первую директорию на сервере скриптом:
+```
+kosogor@vm1-server:~$ ./nfss_script.sh -a /srv/share/tmp1
+Error: скрипт нужно запускать от root (например, через sudo)
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ sudo ./nfss_script.sh -a /srv/share/tmp1
+[sudo] password for kosogor: 
+Директория существует: /srv/share
+Adding directory /srv/share/tmp1 to /etc/exports ...
+
+The following share added to NFS server configuration:
+/srv/share/tmp1  *(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,root_squash,no_all_squash)
+
+Available shared directories on the NFS server 192.168.122.176 :
+Export list for 192.168.122.176:
+/srv/share/tmp1 *
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ sudo ./nfss_script.sh -a /srv/share/tmp1 192.168.122.186/32
+Директория существует: /srv/share
+Adding directory /srv/share/tmp1 to /etc/exports ...
+
+The following share added to NFS server configuration:
+/srv/share/tmp1  192.168.122.186/32(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,root_squash,no_all_squash)
+
+Available shared directories on the NFS server 192.168.122.176 :
+Export list for 192.168.122.176:
+/srv/share/tmp1 192.168.122.186/32
+kosogor@vm1-server:~$
+kosogor@vm1-server:~$ ll /srv/share/tmp1
+total 8
+drwxrwxrwx 2 nobody nogroup 4096 июл 24 19:09 ./
+drwxr-xr-x 4 nobody nogroup 4096 июл 23 10:36 ../
+kosogor@vm1-server:~$
+```
+
+Примонтируем её скриптом на клиенте, после перезагрузки клиента монтирование сохраняется:
+
+```
+kosogor@vm2-client:~$ sudo ./nfsc_script.sh -a 192.168.122.176 /srv/share/tmp1 /mnt3
+[sudo] password for kosogor: 
+Монтируем NFS-директорию /srv/share/tmp1 в /mnt3 ...
+
+Примонтирована NFS директория :
+192.168.122.176:/srv/share/tmp1 on /mnt3 type nfs4 (rw,relatime,vers=4.2,rsize=524288,wsize=524288,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.122.186,local_lock=none,addr=192.168.122.176)
+
+В файле /etc/fstab :
+192.168.122.176:/srv/share/tmp1 /mnt3 nfs vers=3,noauto,x-systemd.automount 0 0
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ mount -l | grep mnt3
+192.168.122.176:/srv/share/tmp1 on /mnt3 type nfs4 (rw,relatime,vers=4.2,rsize=524288,wsize=524288,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.122.186,local_lock=none,addr=192.168.122.176)
+kosogor@vm2-client:~$ sudo reboot
+
+Broadcast message from root@vm2-client on pts/1 (Fri 2026-07-24 19:07:47 UTC):
+
+The system will reboot now!
+
+kosogor@vm2-client:~$ Connection to 192.168.122.186 closed by remote host.
+Connection to 192.168.122.186 closed.
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ ssh kosogor@192.168.122.186
+kosogor@192.168.122.186's password: 
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-136-generic x86_64)
+
+Last login: Thu Jul 23 09:00:00 2026 from 192.168.122.1
+kosogor@vm2-client:~$ mount -l | grep mnt3
+systemd-1 on /mnt3 type autofs (rw,relatime,fd=69,pgrp=1,timeout=0,minproto=5,maxproto=5,direct,pipe_ino=5323)
+kosogor@vm2-client:~$
+```
+
+Создаём в директории два файла: один со стороны клиента, другой со стороны сервера - оба файла видны и со тороны клиента, и со стороны сервера:
+
+```
+kosogor@vm2-client:~$ ll /mnt3
+total 8
+drwxrwxrwx  2 nobody nogroup 4096 июл 24 19:09 ./
+drwxr-xr-x 26 root   root    4096 июл 24 18:28 ../
+kosogor@vm2-client:~$
+
+
+kosogor@vm2-client:~$ cat > created_fron_client.txt
+1234567890
+kosogor@vm2-client:~$
+
+kosogor@vm1-server:~$ cat > created_fron_server.txt
+0987654321
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ ll /srv/share/tmp1
+total 16
+drwxrwxrwx 2 nobody  nogroup 4096 июл 24 19:14 ./
+drwxr-xr-x 4 nobody  nogroup 4096 июл 23 10:36 ../
+-rw-rw-r-- 1 kosogor kosogor   11 июл 24 19:14 created_from_server.txt
+-rw-rw-r-- 1 kosogor kosogor   11 июл 24 19:14 created_fron_client.txt
+kosogor@vm1-server:~$
+
+
+kosogor@vm2-client:~$ ll /mnt3
+total 16
+drwxrwxrwx  2 nobody  nogroup 4096 июл 24 19:14 ./
+drwxr-xr-x 26 root    root    4096 июл 24 18:28 ../
+-rw-rw-r--  1 kosogor kosogor   11 июл 24 19:14 created_from_server.txt
+-rw-rw-r--  1 kosogor kosogor   11 июл 24 19:14 created_fron_client.txt
+kosogor@vm2-client:~$
+```
+
+Аналогично экспортируем ещё одну директорию на сервере и монтируем её на клиенте созданныеми скриптами, также создаём
+в ней два файла:
+
+```
+kosogor@vm1-server:~$ sudo ./nfss_script.sh -a /srv/share/tmp3
+Директория существует: /srv/share
+Adding directory /srv/share/tmp3 to /etc/exports ...
+
+The following share added to NFS server configuration:
+/srv/share/tmp3  *(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,root_squash,no_all_squash)
+
+Available shared directories on the NFS server 192.168.122.176 :
+Export list for 192.168.122.176:
+/srv/share/tmp3 *
+/srv/share/tmp1 192.168.122.186/32
+kosogor@vm1-server:~$
+
+
+kosogor@vm2-client:~$ showmount -e 192.168.122.176
+Export list for 192.168.122.176:
+/srv/share/tmp3 *
+/srv/share/tmp1 192.168.122.186/32
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ sudo ./nfsc_script.sh -a 192.168.122.176 /srv/share/tmp2 /mnt4
+[sudo] password for kosogor: 
+Error: На сервере 192.168.122.176 отсутствует NFS директория /srv/share/tmp2 !
+
+На сервере 192.168.122.176 имеются следующие NFS директории, доступные для монтирования :
+Export list for 192.168.122.176:
+/srv/share/tmp3 *
+/srv/share/tmp1 192.168.122.186/32
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ sudo ./nfsc_script.sh -a 192.168.122.176 /srv/share/tmp3 /mnt4
+Монтируем NFS-директорию /srv/share/tmp3 в /mnt4 ...
+
+Примонтирована NFS директория :
+192.168.122.176:/srv/share/tmp3 on /mnt4 type nfs4 (rw,relatime,vers=4.2,rsize=524288,wsize=524288,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.122.186,local_lock=none,addr=192.168.122.176)
+
+В файле /etc/fstab :
+192.168.122.176:/srv/share/tmp3 /mnt4 nfs vers=3,noauto,x-systemd.automount 0 0
+kosogor@vm2-client:~$
+kosogor@vm2-client:~$ ll /mnt4
+total 8
+drwxrwxrwx  2 nobody nogroup 4096 июл 24 19:15 ./
+drwxr-xr-x 27 root   root    4096 июл 24 19:16 ../
+kosogor@vm2-client:~$
+kosogor@vm2-client:~$ cat > /mnt4/created_fron_client.txt
+ertgsdfsdfsfghrtetyufhj,vhnmcgbsfgsgfgbs
+kosogor@vm2-client:~$
+
+
+kosogor@vm1-server:~$ cat > /srv/share/tmp3/created_from_server.txt
+jkfhskjfgskdjfgskdfgsdifgusldfigsdfgs
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ ll /srv/share/tmp3
+total 16
+drwxrwxrwx 2 nobody  nogroup 4096 июл 24 19:18 ./
+drwxr-xr-x 5 nobody  nogroup 4096 июл 24 19:15 ../
+-rw-rw-r-- 1 kosogor kosogor   38 июл 24 19:18 created_from_server.txt
+-rw-rw-r-- 1 kosogor kosogor   41 июл 24 19:18 created_fron_client.txt
+kosogor@vm1-server:~$ 
+
+
+kosogor@vm2-client:~$ ll /mnt4
+total 16
+drwxrwxrwx  2 nobody  nogroup 4096 июл 24 19:18 ./
+drwxr-xr-x 27 root    root    4096 июл 24 19:16 ../
+-rw-rw-r--  1 kosogor kosogor   38 июл 24 19:18 created_from_server.txt
+-rw-rw-r--  1 kosogor kosogor   41 июл 24 19:18 created_fron_client.txt
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$
+```
+
+Отмонтируем обе директории на клиенте скриптом и удаляем экспорт директорий на сервере скриптом:
+
+```
+kosogor@vm2-client:~$ sudo ./nfsc_script.sh -d 192.168.122.176 /srv/share/tmp3 /mnt4
+Отмонтирование NFS директории /srv/share/tmp3 ...
+Отмонтирована /srv/share/tmp3
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ ll /mnt4
+total 8
+drwxr-xr-x  2 root root 4096 июл 24 19:16 ./
+drwxr-xr-x 27 root root 4096 июл 24 19:16 ../
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$
+kosogor@vm2-client:~$ showmount -e 192.168.122.176
+Export list for 192.168.122.176:
+/srv/share/tmp3 *
+/srv/share/tmp1 192.168.122.186/32
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ mount -l | grep /mnt
+systemd-1 on /mnt1 type autofs (rw,relatime,fd=68,pgrp=1,timeout=0,minproto=5,maxproto=5,direct,pipe_ino=5320)
+systemd-1 on /mnt3 type autofs (rw,relatime,fd=69,pgrp=1,timeout=0,minproto=5,maxproto=5,direct,pipe_ino=5323)
+192.168.122.176:/srv/share/tmp1 on /mnt3 type nfs (rw,relatime,vers=3,rsize=524288,wsize=524288,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,mountaddr=192.168.122.176,mountvers=3,mountport=51293,mountproto=udp,local_lock=none,addr=192.168.122.176)
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ sudo ./nfsc_script.sh -d 192.168.122.176 /srv/share/tmp1 /mnt3
+Отмонтирование NFS директории /srv/share/tmp1 ...
+Отмонтирована /srv/share/tmp1
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ 
+kosogor@vm2-client:~$ showmount -e 192.168.122.176
+Export list for 192.168.122.176:
+/srv/share/tmp1 192.168.122.186/32
+kosogor@vm2-client:~$
+
+kosogor@vm1-server:~$ sudo ./nfss_script.sh -d /srv/share/tmp3
+Deletting directory /srv/share/tmp3 from /etc/exports ...
+Deleted /srv/share/tmp3
+
+Available shared directories on the NFS server 192.168.122.176 :
+Export list for 192.168.122.176:
+/srv/share/tmp1 192.168.122.186/32
+kosogor@vm1-server:~$
+
+
+kosogor@vm1-server:~$ sudo ./nfss_script.sh -d /srv/share/tmp1
+Deletting directory /srv/share/tmp1 from /etc/exports ...
+Deleted /srv/share/tmp1
+
+Available shared directories on the NFS server 192.168.122.176 :
+Export list for 192.168.122.176:
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ showmount -e 192.168.122.176
+Export list for 192.168.122.176:
+kosogor@vm1-server:~$
+
+
+kosogor@vm2-client:~$ showmount -e 192.168.122.176
+Export list for 192.168.122.176:
+kosogor@vm2-client:~$
+```
+
