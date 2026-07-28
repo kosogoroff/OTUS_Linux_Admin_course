@@ -2041,3 +2041,53 @@ drwxr-xr-x 2 root root 4096 июл 25 16:43 ./
 drwxr-xr-x 4 root root 4096 июл 25 16:43 ../
 kosogor@vm2-client:~$ 
 ```
+
+Для сравнения, на NFS-сервере попробовал переключать ядро между стандартным и пересобранным кастомным ядром с отключенным параметром CONFIG_NFS_DISABLE_UDP_SUPPORT=n (или "# CONFIG_LOCALVERSION_AUTO is not set", что то же самое) при прочих одинаковых параметрах настройки NFS-сервера. Действительно, с загруженным стандартным ядром невозможно подмонтировать расшаренную директорию NFSv3 по протоколу UDP, возможно только по TCP (хотя NFS-сервер слушает порты и TCP, и UDP), а с кастомным ядром - возможно подмонтировать расшаренную директорию NFSv3 по протоколу UDP.
+
+```
+kosogor@vm1-server:~$ uname -r
+6.8.0-136-generic
+kosogor@vm1-server:~$ showmount -e 192.168.122.176
+Export list for 192.168.122.176:
+/srv/share/tmp3 *
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ sudo mount -t nfs -o proto=udp,vers=3 192.168.122.176:/srv/share/tmp3 /mnt/nfs
+[sudo] password for kosogor: 
+mount.nfs: an incorrect mount option was specified for /mnt/nfs
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ ss -an | grep 2049
+udp   UNCONN    0      0                                                     0.0.0.0:2049                0.0.0.0:*           
+udp   UNCONN    0      0                                                        [::]:2049                   [::]:*           
+tcp   LISTEN    0      64                                                    0.0.0.0:2049                0.0.0.0:*           
+tcp   LISTEN    0      64                                                       [::]:2049                   [::]:*           
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ sudo mount -t nfs -o proto=tcp,vers=3 192.168.122.176:/srv/share/tmp3 /mnt/nfs
+kosogor@vm1-server:~$ sudo umount /mnt/nfs
+kosogor@vm1-server:~$ sudo mount -t nfs -o proto=udp,vers=3 192.168.122.176:/srv/share/tmp3 /mnt/nfs
+mount.nfs: an incorrect mount option was specified for /mnt/nfs
+kosogor@vm1-server:~$ sudo reboot
+
+<... перезагрузка и выбор пересобранного кастомного ядра с с отключенным параметром CONFIG_NFS_DISABLE_UDP_SUPPORT=n ...>
+
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ uname -r
+6.8.12-custom
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ showmount -e 192.168.122.176
+Export list for 192.168.122.176:
+/srv/share/tmp3 *
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ ss -an | grep 2049
+udp   UNCONN    0      0                                                     0.0.0.0:2049                0.0.0.0:*           
+udp   UNCONN    0      0                                                        [::]:2049                   [::]:*           
+tcp   LISTEN    0      64                                                    0.0.0.0:2049                0.0.0.0:*           
+tcp   LISTEN    0      64                                                       [::]:2049                   [::]:*           
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ sudo mount -t nfs -o proto=udp,vers=3 192.168.122.176:/srv/share/tmp3 /mnt/nfs
+[sudo] password for kosogor: 
+kosogor@vm1-server:~$ 
+kosogor@vm1-server:~$ mount -l | grep -i nfs
+nfsd on /proc/fs/nfsd type nfsd (rw,relatime)
+192.168.122.176:/srv/share/tmp3 on /mnt/nfs type nfs (rw,relatime,vers=3,rsize=32768,wsize=32768,namlen=255,hard,proto=udp,timeo=11,retrans=3,sec=sys,mountaddr=192.168.122.176,mountvers=3,mountport=57196,mountproto=udp,local_lock=none,addr=192.168.122.176)
+kosogor@vm1-server:~$ 
+```
