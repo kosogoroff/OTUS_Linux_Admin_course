@@ -23,39 +23,53 @@
 
 В процессе изучения темы выполнено четыре варианта домашнего задания:
 
-### 1. На ОС AlmaLinux 9.8 (DNF/YUM/RPM-based) (в соответствии с предоставленной методичкой): 
+### 1. Работа с пакетом PRM и с репозиторием пакетов YUM/DNF/RPM в ОС AlmaLinux 9.8 (DNF/YUM/RPM-based) (в соответствии с предоставленной методичкой): 
 
 - cборка пакета nginx с модулем сжатия Brotli, установка и настройка собранного nginx, проверка работоспособности собранного сервера, тестирование сжатия brotli при передаче файлов;
 
-- создание RPM-пакета; создание репозитория YUM/RPM развёртывание его на установленном nginx, публикация в нём созданного пакета;
+- создание RPM-пакета;
+  
+- создание репозитория YUM/RPM развёртывание его на установленном nginx, публикация в нём созданного пакета;
 
 - на клиентской машине подключение репозитория как локального через file:// и по http:// с сервера nginx.
 
-### 1.1. На ОС AlmaLinux 9.8 (DNF/YUM/RPM-based): 
 
-- cборка пакета nginx в базовой конфигурации без дополнительных модулей и флагов (для упрощения процесса);
-
-- создание RPM-пакета.
-
-### 2. На ОС Ubuntu 24.04 (APT/DPKG-based): 
+### 2. Работа с пакетом DEB и с репозиторием пакетов APT/DEB в  ОС Ubuntu 24.04 (APT/DPKG-based): 
 
 - cборка пакета nginx с модулем сжатия Brotli, установка и настройка собранного nginx, проверка работоспособности собранного сервера, тестирование сжатия brotli при передаче файлов;
 
-- создание DEB-пакета; создание репозитория YUM/RPM развёртывание его на установленном nginx, публикация в нём созданного пакета;
+- создание DEB-пакета с помощью утилиты fpm ;
+  
+- создание репозитория APT/DEB развёртывание его на установленном nginx, публикация в нём созданного пакета;
 
 - на клиентской машине подключение репозитория как локального через file:// и по http:// с сервера nginx.
 
-### 2.1. На ОС Ubuntu 24.04 (APT/DPKG-based): 
+
+### 2.1. Повторная сборка пакета DEB в помощью утилиты debuild и работа с репозиторием пакетов APT/DEB в ОС Ubuntu 24.04 (APT/DPKG-based): 
 
 - cборка пакета nginx в базовой конфигурации без дополнительных модулей и флагов (для упрощения процесса);
 
-- создание DEB-пакета.
+- создание DEB-пакета;
+  
+- дополнительно проведена повторная cборка пакета nginx в базовой конфигурации без дополнительных модулей и создание DEB-пакета в Docker.
+
+### 2.2. Повторная сборка пакета DEB в помощью утилиты debuild и работа с репозиторием пакетов APT/DEB в ОС Ubuntu 24.04 (APT/DPKG-based): 
+
+- установка Docker, создание Dockerfile на основе опыта предыдущего пункта 2.1;
+
+- cборка пакета nginx в базовой конфигурации без дополнительных модулей и флагов в Docker;
+
+- создание DEB-пакета в Docker и выгрузка готовых DEB-пакетов из  Docker.
+
+Таким образом, процесс от компиляции исходного выбранного пакета до создания пакета DEB либо RPM, и далее размещения созданного пакета в соответствующем
+репозитории и подключения созданного репозитория к соответствующим клиентским машинам был пройден полностью несколько раз для DNF/YUM/RPM-based и для APT/DPKG-based
+семейств ОС Linux.
 
 
 Далее приведены результаты.
 
 
-# 1. На ОС AlmaLinux 9.8 (DNF/YUM/RPM-based) (в соответствии с предоставленной методичкой): 
+# 1. Работа с пакетом PRM и с репозиторием пакетов YUM/DNF/RPM в ОС AlmaLinux 9.8 (DNF/YUM/RPM-based) (в соответствии с предоставленной методичкой): 
 
 ## 0. Чистая ВМ с ОС AlmaLinux 9.8
 
@@ -87,6 +101,7 @@ Linux almalinux-9 5.14.0-687.29.1.el9_8.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Jul 23
 ```
 
 2. Скачивание и установка пакета с исходниками nginx, установка окружения для компиляции nginx, скачивание проекта brotli :
+
 ```
 [root@almalinux-9 ~]# mkdir rpm && cd rpm
 [root@almalinux-9 rpm]# yumdownloader --source nginx
@@ -157,7 +172,7 @@ Submodule path 'deps/brotli': checked out 'ed738e842d2fbdf2d6459e39267a633c4a9b2
 [root@almalinux-9 ~]# 
 ```
 
-3. Подготовка необходимых директорий, файла spec и компиляция пакета:
+3. Подготовка необходимых директорий, файла spec и компиляция модуля brotli, а затем компиляция и сборка основного пакета nginx с модулем brotli :
 
 ```
 [root@almalinux-9 ~]# cd ngx_brotli/deps/brotli
@@ -517,7 +532,7 @@ nginx: configuration file /etc/nginx/nginx.conf test is successful
 [root@almalinux-9 x86_64]#
 ```
 
-5. Создаём репозиторий для RPM-файлов, размещаем в нём файлы созданного пакета:
+5. Создаём репозиторий для RPM-файлов, размещаем в нём файлы созданного пакета, разрешаем на firewall порт 80 для внешнего доступа к серверу nginx:
 
 ```
 [root@almalinux-9 x86_64]# mkdir /usr/share/nginx/html/repo
@@ -838,7 +853,6 @@ appstream                                                                      A
 baseos                                                                         AlmaLinux 9 - BaseOS
 extras                                                                         AlmaLinux 9 - Extras
 [root@almalinux-9 x86_64]# 
-[root@almalinux-9 x86_64]# 
 [root@almalinux-9 x86_64]# sudo tee /etc/yum.repos.d/my-repo.repo > /dev/null <<EOF
 [my-repo]
 name=My Custom Repo
@@ -853,7 +867,6 @@ appstream                                                                      A
 baseos                                                                         AlmaLinux 9 - BaseOS
 extras                                                                         AlmaLinux 9 - Extras
 my-repo                                                                        My Custom Repo
-[root@almalinux-9 x86_64]# 
 [root@almalinux-9 x86_64]# 
 [root@almalinux-9 x86_64]# pwd
 /root/rpmbuild/RPMS/x86_64
@@ -1024,15 +1037,17 @@ nginx-mod-stream.x86_64                              2:1.20.1-28.el9.4.alma.1   
 ```
 
 
-# 1.1.  Сборка пакета RPM nginx в базовой конфигурации без дополнительных модулей и флагов (для упрощения процесса) на ОС AlmaLinux 9.8 (DNF/YUM/RPM-based): 
 
-Данный пункт выполнялся путём проб и ошибок с использованием поиска в Интернет и рекомендаций Яндекс ИИ, цель была собрать стандартный пакет RPM для репозитория стандартной утилитой.
-
-
-# 3. На ОС Ubuntu 24.04 (APT/DPKG-based): 
+# 2. Работа с пакетом DEB и с репозиторием пакетов APT/DEB в  ОС Ubuntu 24.04 (APT/DPKG-based): 
 
 Данный пункт выполнялся путём проб и ошибок с использованием поиска в Интернет и рекомендаций Яндекс ИИ, цель была собрать рабочий пакет
-и проверить его работу.
+и проверить его работу. 
+
+### Примечание:
+
+Сборка DEB-пакета в данном варианте была осложнена внесёнными в пакет изменениями при добавлении модуля Brontli, с помощью стандартной утилиты debuild DEB-пакет собрать не удалось. DEB-пакет с ограниченными возможностями (например, не создающий настройки systemctl при установке) удалось создать с помощью утилиты fpm (которая собирает DEB-пакет из директорий установленного пакета).
+Стандартный полноценный DEB-пакет с помощью стандартной утилиты debuild удалось создать из исходников сервера nginx без дополнительных модулей и изменений в следующем пункте 2.1.
+
 
 ## 0. Чистая ВМ с ОС Ubuntu 24.04
 
@@ -1061,6 +1076,11 @@ kosogor@vm1-server:~$ sudo apt install -y build-essential devscripts fakeroot gi
 
 No VM guests are running outdated hypervisor (qemu) binaries on this host.
 kosogor@vm1-server:~$
+```
+
+2. Получение пакетов исходников для сервера nginx и модуля Brontli
+
+```
 kosogor@vm1-server:~$ mkdir ~/nginx-brotli-build && cd ~/nginx-brotli-build
 kosogor@vm1-server:~$
 kosogor@vm1-server:~/nginx-brotli-build$ apt-get source nginx
@@ -1103,7 +1123,12 @@ remote: Compressing objects: 100% (19/19), done.
 remote: Total 21 (delta 4), reused 9 (delta 1), pack-reused 0 (from 0)
 Receiving objects: 100% (21/21), 17.86 KiB | 163.00 KiB/s, done.
 Resolving deltas: 100% (4/4), done.
-kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$ 
+kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$
+```
+
+3. Установка зависимостей и окружения для компиляции и сборки nginx
+
+```
 kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$ sudo apt-get build-dep nginx -y
 [sudo] password for kosogor: 
 Чтение списков пакетов… Готово
@@ -1153,18 +1178,13 @@ drwxrwxr-x  8 kosogor kosogor 4096 июл 29 17:16 .git
 drwxrwxr-x  2 kosogor kosogor 4096 июл 29 17:16 script
 drwxrwxr-x  2 kosogor kosogor 4096 июл 29 17:16 static
 -rw-rw-r--  1 kosogor kosogor  895 июл 29 17:16 .travis.yml
-kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$ ls -la ngx_brotli/filter
-total 36
-drwxrwxr-x 2 kosogor kosogor  4096 июл 29 17:16 .
-drwxrwxr-x 6 kosogor kosogor  4096 июл 29 17:19 ..
--rw-rw-r-- 1 kosogor kosogor  4072 июл 29 17:16 config
--rw-rw-r-- 1 kosogor kosogor 24158 июл 29 17:16 ngx_http_brotli_filter_module.c
-kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$ ls -la ngx_brotli/static
-total 24
-drwxrwxr-x 2 kosogor kosogor  4096 июл 29 17:16 .
-drwxrwxr-x 6 kosogor kosogor  4096 июл 29 17:19 ..
--rw-rw-r-- 1 kosogor kosogor  1997 июл 29 17:16 config
--rw-rw-r-- 1 kosogor kosogor 10494 июл 29 17:16 ngx_http_brotli_static_module.c
+kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$
+```
+
+4. Настройка файлов, флагов и компиляция/сборка пакета nginx
+
+```
+kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$ vi debian/rules
 kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$
 kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$ cat debian/rules | grep -i add-module
 			--add-module=$(CURDIR)/ngx_brotli
@@ -1252,7 +1272,7 @@ kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$
 
 ```
 
-2. Сборка DEB-пакета в данном варианте была осложнена внесёнными в пакет изменениями при добавлении модулю, с помощью стандартной утилиты debuild DEB-пакет собрать не удалось. DEB-пакет с ограниченными возможностями (например, не создающего настройки systemctl при установке) удалось создать с помощью утилиты fpm (которая собирает DEB-пакет из директорий установленного пакета):
+5. Сборка DEB-пакета в данном варианте была осложнена внесёнными в пакет изменениями при добавлении модулю, с помощью стандартной утилиты debuild DEB-пакет собрать не удалось. DEB-пакет с ограниченными возможностями (например, не создающего настройки systemctl при установке) удалось создать с помощью утилиты fpm (которая собирает DEB-пакет из директорий установленного пакета):
 
 ```
 kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$ sudo apt install ruby-dev build-essential
@@ -1304,7 +1324,7 @@ configure arguments: --prefix=/usr --conf-path=/etc/nginx/nginx.conf --error-log
 kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$
 ```
 
-3. Затем вручную было создана конфигурация systemctl для запуска сервиса nginx, сервис был запущен, сконфигурирован его автозапуск при загрузке ОС, а также отключена перезапись этого пакета при обновлениях:
+6. Затем вручную было создана конфигурация systemctl для запуска сервиса nginx, сервис был запущен, сконфигурирован его автозапуск при загрузке ОС, а также отключена перезапись этого пакета при обновлениях:
 
 ```
 root@vm1-server:/home/kosogor/nginx-brotli-build/nginx-1.24.0# sudo cat > /etc/systemd/system/nginx-brotli.service
@@ -1341,7 +1361,7 @@ nginx-brotli
 root@vm1-server:/home/kosogor/nginx-brotli-build/nginx-1.24.0#
 ```
 
-После запуска установленного сервера nginx с модулем brotli была проверена его работа и сжатие тестового файла brotli-test-big.txt при передаче:
+7. После запуска установленного сервера nginx с модулем brotli была проверена его работа и сжатие тестового файла brotli-test-big.txt при передаче:
 
 ```
 root@vm1-server:/home/kosogor/nginx-brotli-build/nginx-1.24.0# mkdir -p /usr/share/nginx/html
@@ -1412,67 +1432,7 @@ http {
         location = /50x.html {
             root   html;
         }
-
-        # proxy the PHP scripts to Apache listening on 127.0.0.1:80
-        #
-        #location ~ \.php$ {
-        #    proxy_pass   http://127.0.0.1;
-        #}
-
-        # pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
-        #
-        #location ~ \.php$ {
-        #    root           html;
-        #    fastcgi_pass   127.0.0.1:9000;
-        #    fastcgi_index  index.php;
-        #    fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;
-        #    include        fastcgi_params;
-        #}
-
-        # deny access to .htaccess files, if Apache's document root
-        # concurs with nginx's one
-        #
-        #location ~ /\.ht {
-        #    deny  all;
-        #}
     }
-
-
-    # another virtual host using mix of IP-, name-, and port-based configuration
-    #
-    #server {
-    #    listen       8000;
-    #    listen       somename:8080;
-    #    server_name  somename  alias  another.alias;
-
-    #    location / {
-    #        root   html;
-    #        index  index.html index.htm;
-    #    }
-    #}
-
-
-    # HTTPS server
-    #
-    #server {
-    #    listen       443 ssl;
-    #    server_name  localhost;
-
-    #    ssl_certificate      cert.pem;
-    #    ssl_certificate_key  cert.key;
-
-    #    ssl_session_cache    shared:SSL:1m;
-    #    ssl_session_timeout  5m;
-
-    #    ssl_ciphers  HIGH:!aNULL:!MD5;
-    #    ssl_prefer_server_ciphers  on;
-
-    #    location / {
-    #        root   html;
-    #        index  index.html index.htm;
-    #    }
-    #}
-
 }
 root@vm1-server:/home/kosogor/nginx-brotli-build/nginx-1.24.0# 
 root@vm1-server:/home/kosogor/nginx-brotli-build/nginx-1.24.0# curl -H "Accept-Encoding: br" -D - -o /dev/null http://localhost/brotli-test-big.txt
@@ -1539,7 +1499,7 @@ curl: (23) Failure writing output to destination
 root@vm1-server:/home/kosogor/nginx-brotli-build/nginx-1.24.0#
 ```
 
-4. Затем на этом же ВМ был организован репозиторий для DEB-пакетов, в него был добавлен DEB-пакет nginx-brotli с помощью утилиты dpkg-scanpackages:
+8. Затем на этом же ВМ был организован репозиторий для DEB-пакетов, в него был добавлен DEB-пакет nginx-brotli с помощью утилиты dpkg-scanpackages:
 
 ```
 root@vm1-server:/home/kosogor/nginx-brotli-build/nginx-1.24.0# 
@@ -1567,7 +1527,7 @@ root@vm1-server:/var/local/repo/nginx-brotli# ls -lh Packages.gz
 root@vm1-server:/var/local/repo/nginx-brotli#
 ```
 
-5. Затем созданный репозиторий был подключен на клиентской машине (в данном случае, клиентской машиной являлся тот же компьютер) двумя способами:
+9. Затем созданный репозиторий был подключен на клиентской машине (в данном случае, клиентской машиной являлся тот же компьютер) двумя способами:
 как локальный репозиторий через file:// и через http:// с использованием сконфигурированного сервера nginx с модулем brontli - оба репозитория видны
 после подключения при 'apt update ' и пакет nginx-brotli виден в обоих репозиториях. Для простоты пакеты в репозитории не подписывались, поэтому
 оба репозитория подключены для тестирования с опцией [trusted=yes]  :
@@ -1922,7 +1882,7 @@ deb [trusted=yes] http://localhost/repo/nginx-brotli ./
 root@vm1-server:/var/local/repo/nginx-brotli# 
 ```
 
-# 4. На ОС Ubuntu 24.04 (APT/DPKG-based): 
+# 2.1. Повторная сборка пакета DEB в помощью утилиты debuild и работа с репозиторием пакетов APT/DEB в ОС Ubuntu 24.04 (APT/DPKG-based): 
 
 Данный пункт выполнялся путём проб и ошибок с использованием поиска в Интернет и рекомендаций Яндекс ИИ, цель была собрать стандартный пакет DEB для репозитория стандартной утилитой debuild.
 
@@ -2008,7 +1968,7 @@ drwxr-xr-x 9 kosogor kosogor   4096 июл 30 03:24 src/
 kosogor@kosogor:~/nginx-1.24.0$ 
 ```
 
-2. Создаём необходимую структуру директорий, заполняем необходимые для компиляции и сборки файлы debian/control , debian/rules , debian/changelog :
+3. Создаём необходимую структуру директорий, заполняем необходимые для компиляции и сборки файлы debian/control , debian/rules , debian/changelog :
 
 ```
 kosogor@kosogor:~/nginx-1.24.0$ dh_make -s -y
@@ -2112,7 +2072,7 @@ nginx (1.24.0-1) UNRELEASED; urgency=medium
 kosogor@kosogor:~/nginx-1.24.0$
 ```
 
-3. Запускаем компиляцию, по возникающим сообщениям доустанавливаем недостающие пакеты, правим файлы debian/compat и debian/control:
+4. Запускаем компиляцию, по возникающим сообщениям доустанавливаем недостающие пакеты, правим файлы debian/compat и debian/control:
 
 ```
 kosogor@kosogor:~/nginx-1.24.0$ debuild -us -uc
@@ -2437,7 +2397,7 @@ drwxr-xr-x root/root         0 2026-07-30 03:30 ./usr/share/nginx/html/
 kosogor@kosogor:~$ 
 ```
 
-# 5. На ОС Ubuntu 24.04 (APT/DPKG-based), сборка в Docker: 
+# 2.2 Повторная компиляция и сборка пакета DEB на ОС Ubuntu 24.04 (APT/DPKG-based), сборка в Docker: 
 
 Данный пункт выполнялся путём проб и ошибок с использованием поиска в Интернет и рекомендаций Яндекс ИИ, цель была собрать стандартный пакет DEB для репозитория стандартной утилитой debuild, сборка производилась в Docker.
 
