@@ -162,7 +162,10 @@ Submodule path 'deps/brotli': checked out 'ed738e842d2fbdf2d6459e39267a633c4a9b2
 ```
 [root@almalinux-9 ~]# cd ngx_brotli/deps/brotli
 [root@almalinux-9 brotli]# mkdir out && cd out
-[root@almalinux-9 out]# cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_INSTALL_PREFIX=./installed ..
+[root@almalinux-9 out]# cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native \
+ -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 \
+-march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" \
+ -DCMAKE_INSTALL_PREFIX=./installed ..
 -- The C compiler identification is GNU 11.5.0
 -- Detecting C compiler ABI info
 -- Detecting C compiler ABI info - done
@@ -338,7 +341,7 @@ perl(strict) perl(warnings)
 Выполнено!
 ```
 
-4. Включаем и настраиваем установленный nginx, конфигурируем, создаём тестовы файл и проверяем работы компрессии brotli - компрессия работает:
+4. Включаем и настраиваем установленный nginx, конфигурируем, создаём тестовый файл и проверяем работы компрессии brotli - компрессия работает:
 
 ```
 [root@almalinux-9 x86_64]#  systemctl start nginx
@@ -517,13 +520,508 @@ nginx: configuration file /etc/nginx/nginx.conf test is successful
 5. Создаём репозиторий для RPM-файлов, размещаем в нём файлы созданного пакета:
 
 ```
+[root@almalinux-9 x86_64]# mkdir /usr/share/nginx/html/repo
+[root@almalinux-9 x86_64]# cp ~/rpmbuild/RPMS/x86_64/*.rpm /usr/share/nginx/html/repo/
+[root@almalinux-9 x86_64]# createrepo /usr/share/nginx/html/repo/
+Directory walk started
+Directory walk done - 10 packages
+Temporary output repo path: /usr/share/nginx/html/repo/.repodata/
+Preparing sqlite DBs
+Pool started (with 5 workers)
+Pool finished
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# vi /etc/nginx/nginx.conf
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]#  systemctl reload nginx
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# cat /etc/nginx/nginx.conf
+# For more information on configuration, see:
+#   * Official English Documentation: http://nginx.org/en/docs/
+#   * Official Russian Documentation: http://nginx.org/ru/docs/
 
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+
+# Load dynamic modules. See /usr/share/doc/nginx/README.dynamic.
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    # Load modular configuration files from the /etc/nginx/conf.d directory.
+    # See http://nginx.org/en/docs/ngx_core_module.html#include
+    # for more information.
+    include /etc/nginx/conf.d/*.conf;
+
+    server {
+        listen       80;
+        listen       [::]:80;
+        server_name  _;
+        root         /usr/share/nginx/html;
+        
+      	index index.html index.htm;
+	autoindex on;
+
+
+
+        # Твой тестовый location
+        location /brotli-test.txt {
+            brotli on;
+            brotli_comp_level 4;
+            # add_header X-Brotli-Test "YES";
+            # add_header Content-Encoding br;  <-- эту строку лучше УДАЛИТЬ (см. пояснение ниже)
+        }
+
+
+        location = /brotli-test-big.txt {
+            brotli on;
+            brotli_comp_level 4;
+            brotli_types text/plain;
+            # add_header X-Brotli-Big-Test "YES";
+        }
+
+
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
+
+        error_page 404 /404.html;
+        location = /404.html {
+        }
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+        }
+    }
+}
+
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# curl -a http://localhost/repo/
+<html>
+<head><title>Index of /repo/</title></head>
+<body>
+<h1>Index of /repo/</h1><hr><pre><a href="../">../</a>
+<a href="repodata/">repodata/</a>                                          29-Jul-2026 12:51                   -
+<a href="nginx-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-1.20.1-28.el9.4.alma.1.x86_64.rpm</a>            29-Jul-2026 12:51               38286
+<a href="nginx-all-modules-1.20.1-28.el9.4.alma.1.noarch.rpm">nginx-all-modules-1.20.1-28.el9.4.alma.1.noarch..&gt;</a> 29-Jul-2026 12:51                9377
+<a href="nginx-core-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-core-1.20.1-28.el9.4.alma.1.x86_64.rpm</a>       29-Jul-2026 12:51             1033130
+<a href="nginx-filesystem-1.20.1-28.el9.4.alma.1.noarch.rpm">nginx-filesystem-1.20.1-28.el9.4.alma.1.noarch.rpm</a> 29-Jul-2026 12:51               10977
+<a href="nginx-mod-devel-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-devel-1.20.1-28.el9.4.alma.1.x86_64.rpm</a>  29-Jul-2026 12:51              763092
+<a href="nginx-mod-http-image-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-http-image-filter-1.20.1-28.el9.4.alm..&gt;</a> 29-Jul-2026 12:51               21363
+<a href="nginx-mod-http-perl-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-http-perl-1.20.1-28.el9.4.alma.1.x86_..&gt;</a> 29-Jul-2026 12:51               32894
+<a href="nginx-mod-http-xslt-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-http-xslt-filter-1.20.1-28.el9.4.alma..&gt;</a> 29-Jul-2026 12:51               20169
+<a href="nginx-mod-mail-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-mail-1.20.1-28.el9.4.alma.1.x86_64.rpm</a>   29-Jul-2026 12:51               55773
+<a href="nginx-mod-stream-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-stream-1.20.1-28.el9.4.alma.1.x86_64.rpm</a> 29-Jul-2026 12:51               82360
+</pre><hr></body>
+</html>
+[root@almalinux-9 x86_64]# ss -tlnp
+State    Recv-Q   Send-Q     Local Address:Port     Peer Address:Port  Process                                                                              
+LISTEN   0        511              0.0.0.0:80            0.0.0.0:*      users:(("nginx",pid=36873,fd=6),("nginx",pid=36872,fd=6),("nginx",pid=36774,fd=6))  
+LISTEN   0        128              0.0.0.0:22            0.0.0.0:*      users:(("sshd",pid=921,fd=7))                                                       
+LISTEN   0        4096           127.0.0.1:631           0.0.0.0:*      users:(("cupsd",pid=920,fd=8))                                                      
+LISTEN   0        4096               [::1]:631              [::]:*      users:(("cupsd",pid=920,fd=7))                                                      
+LISTEN   0        511                 [::]:80               [::]:*      users:(("nginx",pid=36873,fd=7),("nginx",pid=36872,fd=7),("nginx",pid=36774,fd=7))  
+LISTEN   0        128                 [::]:22               [::]:*      users:(("sshd",pid=921,fd=8))                                                       
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]#
+[root@almalinux-9 x86_64]# ll /usr/share/nginx/html
+итого 124
+-rw-r--r--. 1 root root   3806 июл  8 00:33 404.html
+-rw-r--r--. 1 root root   3849 июл  8 00:33 50x.html
+-rw-r--r--. 1 root root 104000 июл 29 15:45 brotli-test-big.txt
+-rw-r--r--. 1 root root     24 июл 29 15:32 brotli-test.txt
+drwxr-xr-x. 2 root root     27 июл 29 15:27 icons
+lrwxrwxrwx. 1 root root     25 июл 29 15:20 index.html -> ../../testpage/index.html
+-rw-r--r--. 1 root root    368 июл  8 00:33 nginx-logo.png
+lrwxrwxrwx. 1 root root     14 июл 29 15:20 poweredby.png -> nginx-logo.png
+drwxr-xr-x. 3 root root   4096 июл 29 15:51 repo
+lrwxrwxrwx. 1 root root     37 июл 29 15:20 system_noindex_logo.png -> ../../pixmaps/system-noindex-logo.png
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# ifconfig
+enp1s0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.122.178  netmask 255.255.255.0  broadcast 192.168.122.255
+        inet6 fe80::5054:ff:fedb:f5e8  prefixlen 64  scopeid 0x20<link>
+        ether 52:54:00:db:f5:e8  txqueuelen 1000  (Ethernet)
+        RX packets 127062  bytes 146768617 (139.9 MiB)
+        RX errors 0  dropped 5136  overruns 0  frame 0
+        TX packets 82552  bytes 7289013 (6.9 MiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 97  bytes 116294 (113.5 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 97  bytes 116294 (113.5 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# 
+
+ 
+[root@almalinux-9 x86_64]# firewall-cmd --state
+running
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# firewall-cmd --list-all
+public (active)
+  target: default
+  icmp-block-inversion: no
+  interfaces: enp1s0
+  sources: 
+  services: cockpit dhcpv6-client ssh
+  ports: 
+  protocols: 
+  forward: yes
+  masquerade: no
+  forward-ports: 
+  source-ports: 
+  icmp-blocks: 
+  rich rules: 
+[root@almalinux-9 x86_64]# firewall-cmd --add-service=http --permanent
+success
+[root@almalinux-9 x86_64]# firewall-cmd --reload
+success
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# firewall-cmd --list-all
+public (active)
+  target: default
+  icmp-block-inversion: no
+  interfaces: enp1s0
+  sources: 
+  services: cockpit dhcpv6-client http ssh
+  ports: 
+  protocols: 
+  forward: yes
+  masquerade: no
+  forward-ports: 
+  source-ports: 
+  icmp-blocks: 
+  rich rules: 
+[root@almalinux-9 x86_64]#
+[root@almalinux-9 x86_64]# cat /etc/nginx/nginx.conf
+# For more information on configuration, see:
+#   * Official English Documentation: http://nginx.org/en/docs/
+#   * Official Russian Documentation: http://nginx.org/ru/docs/
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+
+# Load dynamic modules. See /usr/share/doc/nginx/README.dynamic.
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    # Включаем Brotli глобально
+    brotli on;
+    brotli_comp_level 6;  # 6 — хороший баланс скорость/сжатие (4 был для теста)
+    
+    # Явно указываем типы, которые хотим сжимать
+    brotli_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/xml
+        font/ttf font/woff font/woff2;
+
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    # Load modular configuration files from the /etc/nginx/conf.d directory.
+    # See http://nginx.org/en/docs/ngx_core_module.html#include
+    # for more information.
+    include /etc/nginx/conf.d/*.conf;
+
+    server {
+        listen       80;
+        listen       [::]:80;
+        server_name  _;
+        root         /usr/share/nginx/html;
+        
+      	index index.html index.htm;
+	    autoindex on;
+
+
+
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
+
+        error_page 404 /404.html;
+        location = /404.html {
+        }
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+        }
+    }
+}
 ```
 
 После этого на клиентской машине в броузере видно содержимое созданного репозитория:
 
 <img width="953" height="502" alt="изображение" src="https://github.com/user-attachments/assets/49b09801-7375-4fcb-ab46-ec9026b9c37c" />
 
+```
+[root@mv334 vm]# curl -a http://192.168.122.178/repo/
+<html>
+<head><title>Index of /repo/</title></head>
+<body>
+<h1>Index of /repo/</h1><hr><pre><a href="../">../</a>
+<a href="repodata/">repodata/</a>                                          29-Jul-2026 12:51                   -
+<a href="nginx-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-1.20.1-28.el9.4.alma.1.x86_64.rpm</a>            29-Jul-2026 12:51               38286
+<a href="nginx-all-modules-1.20.1-28.el9.4.alma.1.noarch.rpm">nginx-all-modules-1.20.1-28.el9.4.alma.1.noarch..&gt;</a> 29-Jul-2026 12:51                9377
+<a href="nginx-core-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-core-1.20.1-28.el9.4.alma.1.x86_64.rpm</a>       29-Jul-2026 12:51             1033130
+<a href="nginx-filesystem-1.20.1-28.el9.4.alma.1.noarch.rpm">nginx-filesystem-1.20.1-28.el9.4.alma.1.noarch.rpm</a> 29-Jul-2026 12:51               10977
+<a href="nginx-mod-devel-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-devel-1.20.1-28.el9.4.alma.1.x86_64.rpm</a>  29-Jul-2026 12:51              763092
+<a href="nginx-mod-http-image-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-http-image-filter-1.20.1-28.el9.4.alm..&gt;</a> 29-Jul-2026 12:51               21363
+<a href="nginx-mod-http-perl-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-http-perl-1.20.1-28.el9.4.alma.1.x86_..&gt;</a> 29-Jul-2026 12:51               32894
+<a href="nginx-mod-http-xslt-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-http-xslt-filter-1.20.1-28.el9.4.alma..&gt;</a> 29-Jul-2026 12:51               20169
+<a href="nginx-mod-mail-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-mail-1.20.1-28.el9.4.alma.1.x86_64.rpm</a>   29-Jul-2026 12:51               55773
+<a href="nginx-mod-stream-1.20.1-28.el9.4.alma.1.x86_64.rpm">nginx-mod-stream-1.20.1-28.el9.4.alma.1.x86_64.rpm</a> 29-Jul-2026 12:51               82360
+</pre><hr></body>
+</html>
+[root@mv334 vm]#
+```
+
+6. На клиентской машине (та же самая машина, на которой расположен репозиторий) подключаем репозиторий двумя способами: по http://
+с использованием сконфигурированного сервера nginx и как локальный репозиторий через file:// - пакет nginx после этого виден
+в обоих подключенных репозиториях. Для простоты пакеты в репозитории не подписывались, поэтому оба репозитория подключены с опцией gpgcheck=0
+
+
+```
+[root@almalinux-9 x86_64]# dnf repolist
+идентификатор репозитория                                                      имя репозитория
+appstream                                                                      AlmaLinux 9 - AppStream
+baseos                                                                         AlmaLinux 9 - BaseOS
+extras                                                                         AlmaLinux 9 - Extras
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# sudo tee /etc/yum.repos.d/my-repo.repo > /dev/null <<EOF
+[my-repo]
+name=My Custom Repo
+baseurl=http://localhost/repo/
+enabled=1
+gpgcheck=0
+EOF
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# dnf repolist
+идентификатор репозитория                                                      имя репозитория
+appstream                                                                      AlmaLinux 9 - AppStream
+baseos                                                                         AlmaLinux 9 - BaseOS
+extras                                                                         AlmaLinux 9 - Extras
+my-repo                                                                        My Custom Repo
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# pwd
+/root/rpmbuild/RPMS/x86_64
+[root@almalinux-9 x86_64]# ll
+итого 2044
+-rw-r--r--. 1 root root   38286 июл 29 15:20 nginx-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root    9377 июл 29 15:23 nginx-all-modules-1.20.1-28.el9.4.alma.1.noarch.rpm
+-rw-r--r--. 1 root root 1033130 июл 29 15:20 nginx-core-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   10977 июл 29 15:23 nginx-filesystem-1.20.1-28.el9.4.alma.1.noarch.rpm
+-rw-r--r--. 1 root root  763092 июл 29 15:20 nginx-mod-devel-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   21363 июл 29 15:20 nginx-mod-http-image-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   32894 июл 29 15:20 nginx-mod-http-perl-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   20169 июл 29 15:20 nginx-mod-http-xslt-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   55773 июл 29 15:20 nginx-mod-mail-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   82360 июл 29 15:20 nginx-mod-stream-1.20.1-28.el9.4.alma.1.x86_64.rpm
+[root@almalinux-9 x86_64]#
+[root@almalinux-9 x86_64]# dnf list --showduplicates | grep -i nginx
+nginx.x86_64                                         2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-all-modules.noarch                             2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-core.x86_64                                    2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-filesystem.noarch                              2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-devel.x86_64                               2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx.x86_64                                         2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx.x86_64                                         2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx.x86_64                                         2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx.x86_64                                         2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-all-modules.noarch                             2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-all-modules.noarch                             2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-all-modules.noarch                             2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-all-modules.noarch                             2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-core.x86_64                                    2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-core.x86_64                                    2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-core.x86_64                                    2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-core.x86_64                                    2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-filesystem.noarch                              2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-filesystem.noarch                              2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-filesystem.noarch                              2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-filesystem.noarch                              2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-devel.x86_64                               2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9_8.4.alma.1            appstream    
+pcp-pmda-nginx.x86_64                                6.3.7-8.el9_8                         appstream    
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# dnf list --showduplicates | grep -i nginx | grep -i my-repo
+nginx.x86_64                                         2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-all-modules.noarch                             2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-core.x86_64                                    2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-filesystem.noarch                              2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-devel.x86_64                               2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9.4.alma.1              my-repo      
+[root@almalinux-9 x86_64]# 
+
+[root@almalinux-9 x86_64]# sudo tee /etc/yum.repos.d/my-local-repo.repo > /dev/null <<EOF
+[my-repo-local]
+name=My Local Custom Repo
+baseurl=file:///usr/share/nginx/html/repo/
+enabled=1
+gpgcheck=0
+EOF       
+[root@almalinux-9 x86_64]# dnf repolist
+идентификатор репозитория                                                      имя репозитория
+appstream                                                                      AlmaLinux 9 - AppStream
+baseos                                                                         AlmaLinux 9 - BaseOS
+extras                                                                         AlmaLinux 9 - Extras
+my-repo                                                                        My Custom Repo
+my-repo-local                                                                  My Local Custom Repo
+[root@almalinux-9 x86_64]# dnf list --showduplicates | grep -i nginx
+nginx.x86_64                                         2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-all-modules.noarch                             2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-core.x86_64                                    2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-filesystem.noarch                              2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-devel.x86_64                               2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9.4.alma.1              @@commandline
+nginx.x86_64                                         2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx.x86_64                                         2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx.x86_64                                         2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx.x86_64                                         2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx.x86_64                                         2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-all-modules.noarch                             2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-all-modules.noarch                             2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-all-modules.noarch                             2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-all-modules.noarch                             2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-all-modules.noarch                             2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-core.x86_64                                    2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-core.x86_64                                    2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-core.x86_64                                    2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-core.x86_64                                    2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-core.x86_64                                    2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-filesystem.noarch                              2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-filesystem.noarch                              2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-filesystem.noarch                              2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-filesystem.noarch                              2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-filesystem.noarch                              2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-devel.x86_64                               2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-devel.x86_64                               2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9_8.4.alma.1            appstream    
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9.4.alma.1              my-repo      
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9_8.2.alma.1            appstream    
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9_8.3.alma.1            appstream    
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9_8.4.alma.1            appstream    
+pcp-pmda-nginx.x86_64                                6.3.7-8.el9_8                         appstream    
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# dnf list --showduplicates | grep -i nginx | grep -i my-repo-local
+nginx.x86_64                                         2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-all-modules.noarch                             2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-core.x86_64                                    2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-filesystem.noarch                              2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-devel.x86_64                               2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-http-image-filter.x86_64                   2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-http-perl.x86_64                           2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-http-xslt-filter.x86_64                    2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-mail.x86_64                                2:1.20.1-28.el9.4.alma.1              my-repo-local
+nginx-mod-stream.x86_64                              2:1.20.1-28.el9.4.alma.1              my-repo-local
+[root@almalinux-9 x86_64]# 
+```
 
 
 # 1.1.  Сборка пакета RPM nginx в базовой конфигурации без дополнительных модулей и флагов (для упрощения процесса) на ОС AlmaLinux 9.8 (DNF/YUM/RPM-based): 
@@ -1069,9 +1567,10 @@ root@vm1-server:/var/local/repo/nginx-brotli# ls -lh Packages.gz
 root@vm1-server:/var/local/repo/nginx-brotli#
 ```
 
-5. Затем созданные репозиторий был подключен на клиентской машине (в данном случае, клиентской машиной являлся тот же компьютер) двумя способами:
+5. Затем созданный репозиторий был подключен на клиентской машине (в данном случае, клиентской машиной являлся тот же компьютер) двумя способами:
 как локальный репозиторий через file:// и через http:// с использованием сконфигурированного сервера nginx с модулем brontli - оба репозитория видны
-после подключения при 'apt update ' и пакет nginx-brotli виден в обоих репозиториях  :
+после подключения при 'apt update ' и пакет nginx-brotli виден в обоих репозиториях. Для простоты пакеты в репозитории не подписывались, поэтому
+оба репозитория подключены для тестирования с опцией [trusted=yes]  :
 
 ```
 root@vm1-server:/var/local/repo/nginx-brotli# echo "deb [trusted=yes] file:///var/local/repo/nginx-brotli ./" | sudo tee /etc/apt/sources.list.d/local-nginx-brotli.list
