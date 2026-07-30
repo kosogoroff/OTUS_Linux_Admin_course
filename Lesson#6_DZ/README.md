@@ -67,7 +67,468 @@ Linux almalinux-9 5.14.0-687.29.1.el9_8.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Jul 23
 [kosogor@almalinux-9 ~]$
 ```
 
+1. Установка необходимых для сборки пакетов, установка окружения и зависимостей, необходимых для компиляции и сборки пакета nginx:
 
+```
+[root@almalinux-9 ~]# yum install -y rpmdevtools rpm-build createrepo yum-utils cmake gcc git
+Последняя проверка окончания срока действия метаданных: 1:09:25 назад, Ср 29 июл 2026 13:44:09.
+Зависимости разрешены.
+============================================================================================================================================================
+ Пакет                                       Архитектура                  Версия                                      Репозиторий                     Размер
+============================================================================================================================================================
+Установка:
+ cmake                                       x86_64                       3.31.8-3.el9                                appstream                        13 M
+ createrepo_c                                x86_64                       0.20.1-4.el9                                appstream                        71 k
+ gcc
+<...>
+
+Выполнено!
+[root@almalinux-9 ~]#
+```
+
+2. Скачивание и установка пакета с исходниками nginx, установка окружения для компиляции nginx, скачивание проекта brotli :
+```
+[root@almalinux-9 ~]# mkdir rpm && cd rpm
+[root@almalinux-9 rpm]# yumdownloader --source nginx
+подключение репозитория appstream-source
+подключение репозитория baseos-source
+подключение репозитория extras-source
+AlmaLinux 9 - AppStream - Source                                                                                            215 kB/s | 906 kB     00:04    
+AlmaLinux 9 - BaseOS - Source                                                                                               170 kB/s | 455 kB     00:02    
+AlmaLinux 9 - Extras - Source                                                                                               2.8 kB/s | 9.7 kB     00:03    
+nginx-1.20.1-28.el9_8.4.alma.1.src.rpm                                                                                      1.3 MB/s | 1.1 MB     00:00    
+[root@almalinux-9 rpm]#
+[root@almalinux-9 rpm]# ll
+итого 1104
+-rw-r--r--. 1 root root 1126804 июл 29 14:55 nginx-1.20.1-28.el9_8.4.alma.1.src.rpm
+[root@almalinux-9 rpm]# rpm -Uvh nginx*.src.rpm
+Обновление / установка...
+   1:nginx-2:1.20.1-28.el9_8.4.alma.1 предупреждение: user mockbuild does not exist - using root
+предупреждение: group mock does not exist - using root
+предупреждение: user mockbuild does not exist - using root
+<...>
+################################# [100%]
+[root@almalinux-9 rpm]# ll
+Итого 1104
+-rw-r--r--. 1 root root 1126804 июл 29 14:55 nginx-1.20.1-28.el9_8.4.alma.1.src.rpm
+[root@almalinux-9 rpm]# ll ..
+итого 4
+-rw-------. 1 root root 1140 июл 29 10:19 anaconda-ks.cfg
+drwxr-xr-x. 2 root root   52 июл 29 14:55 rpm
+drwxr-xr-x. 4 root root   34 июл 29 14:58 rpmbuild
+[root@almalinux-9 rpm]# cd ..
+[root@almalinux-9 ~]# yum-builddep nginx
+подключение репозитория appstream-source
+подключение репозитория baseos-source
+подключение репозитория extras-source
+Последняя проверка окончания срока действия метаданных: 0:03:21 назад, Ср 29 июл 2026 14:55:49.
+Пакет make-1:4.3-8.el9.x86_64 уже установлен.
+Пакет gcc-11.5.0-14.el9.alma.1.x86_64 уже установлен.
+Пакет systemd-252-67.el9_8.4.alma.1.x86_64 уже установлен.
+Пакет systemd-rpm-macros-252-67.el9_8.4.alma.1.noarch уже установлен.
+Пакет gnupg2-2.3.3-5.el9_7.x86_64 уже установлен.
+Зависимости разрешены.
+============================================================================================================================================================
+ Пакет                                           Архитектура                Версия                                      Репозиторий                   Размер
+============================================================================================================================================================
+Установка:
+ gd-devel                                        x86_64                     2.3.2-3.el9                                 appstream                      37 k
+ libxslt-devel                                   x86_64                     1.1.34-14.el9_8.1
+<...>
+Выполнено!
+[root@almalinux-9 ~]# 
+[root@almalinux-9 ~]# git clone --recurse-submodules -j8 https://github.com/google/ngx_brotli
+Клонирование в «ngx_brotli»...
+remote: Enumerating objects: 237, done.
+remote: Counting objects: 100% (72/72), done.
+remote: Compressing objects: 100% (22/22), done.
+remote: Total 237 (delta 55), reused 50 (delta 50), pack-reused 165 (from 1)
+Получение объектов: 100% (237/237), 78.03 КиБ | 579.00 КиБ/с, готово.
+Определение изменений: 100% (116/116), готово.
+Подмодуль «deps/brotli» (https://github.com/google/brotli.git) зарегистрирован по пути «deps/brotli»
+Клонирование в «/root/ngx_brotli/deps/brotli»...
+remote: Enumerating objects: 9541, done.        
+remote: Counting objects: 100% (205/205), done.        
+remote: Compressing objects: 100% (117/117), done.        
+remote: Total 9541 (delta 132), reused 89 (delta 88), pack-reused 9336 (from 3)        
+Получение объектов: 100% (9541/9541), 41.89 МиБ | 5.19 МиБ/с, готово.
+Определение изменений: 100% (6143/6143), готово.
+Submodule path 'deps/brotli': checked out 'ed738e842d2fbdf2d6459e39267a633c4a9b2f5d'
+[root@almalinux-9 ~]# 
+```
+
+3. Подготовка необходимых директорий, файла spec и компиляция пакета:
+
+```
+[root@almalinux-9 ~]# cd ngx_brotli/deps/brotli
+[root@almalinux-9 brotli]# mkdir out && cd out
+[root@almalinux-9 out]# cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_INSTALL_PREFIX=./installed ..
+-- The C compiler identification is GNU 11.5.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Build type is 'Release'
+-- Performing Test BROTLI_EMSCRIPTEN
+-- Performing Test BROTLI_EMSCRIPTEN - Failed
+-- Compiler is not EMSCRIPTEN
+-- Looking for log2
+-- Looking for log2 - not found
+-- Looking for log2
+-- Looking for log2 - found
+-- Configuring done (1.1s)
+-- Generating done (0.0s)
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_FLAGS
+
+
+-- Build files have been written to: /root/ngx_brotli/deps/brotli/out
+[root@almalinux-9 out]# ll
+итого 140
+-rw-r--r--.  1 root root 17989 июл 29 15:02 CMakeCache.txt
+drwxr-xr-x. 37 root root  4096 июл 29 15:02 CMakeFiles
+-rw-r--r--.  1 root root  4478 июл 29 15:02 cmake_install.cmake
+-rw-r--r--.  1 root root 39592 июл 29 15:02 CTestTestfile.cmake
+-rw-r--r--.  1 root root  2510 июл 29 15:02 DartConfiguration.tcl
+-rw-r--r--.  1 root root   336 июл 29 15:02 libbrotlicommon.pc
+-rw-r--r--.  1 root root   363 июл 29 15:02 libbrotlidec.pc
+-rw-r--r--.  1 root root   363 июл 29 15:02 libbrotlienc.pc
+-rw-r--r--.  1 root root 52445 июл 29 15:02 Makefile
+drwxr-xr-x.  3 root root    23 июл 29 15:02 Testing
+[root@almalinux-9 out]# 
+[root@almalinux-9 out]# cmake --build . --config Release -j 2 --target brotlienc
+[  6%] Building C object CMakeFiles/brotlicommon.dir/c/common/constants.c.o
+[  6%] Building C object CMakeFiles/brotlicommon.dir/c/common/context.c.o
+[ 13%] Building C object CMakeFiles/brotlicommon.dir/c/common/dictionary.c.o
+[ 13%] Building C object CMakeFiles/brotlicommon.dir/c/common/platform.c.o
+<...>
+[100%] Linking C static library libbrotlienc.a
+[100%] Built target brotlienc
+[root@almalinux-9 out]# ll
+итого 2592
+-rw-r--r--.  1 root root   17989 июл 29 15:02 CMakeCache.txt
+drwxr-xr-x. 37 root root    4096 июл 29 15:02 CMakeFiles
+-rw-r--r--.  1 root root    4478 июл 29 15:02 cmake_install.cmake
+-rw-r--r--.  1 root root   39592 июл 29 15:02 CTestTestfile.cmake
+-rw-r--r--.  1 root root    2510 июл 29 15:02 DartConfiguration.tcl
+-rw-r--r--.  1 root root  124424 июл 29 15:02 libbrotlicommon.a
+-rw-r--r--.  1 root root     336 июл 29 15:02 libbrotlicommon.pc
+-rw-r--r--.  1 root root     363 июл 29 15:02 libbrotlidec.pc
+-rw-r--r--.  1 root root 2383766 июл 29 15:02 libbrotlienc.a
+-rw-r--r--.  1 root root     363 июл 29 15:02 libbrotlienc.pc
+-rw-r--r--.  1 root root   52445 июл 29 15:02 Makefile
+drwxr-xr-x.  3 root root      23 июл 29 15:02 Testing
+[root@almalinux-9 out]# 
+[root@almalinux-9 out]# cd ../../../..
+[root@almalinux-9 ~]# find / -name spec
+/usr/share/doc/rpm/spec
+[root@almalinux-9 ~]# ll rpmbuild/SPECS
+итого 52
+-rw-r--r--. 1 root root 49189 июл  8 00:34 nginx.spec
+[root@almalinux-9 ~]# vi rpmbuild/SPECS/nginx.spec
+[root@almalinux-9 ~]# cat rpmbuild/SPECS/nginx.spec | grep add-module
+    --add-module=/root/ngx_brotli \
+[root@almalinux-9 ~]# 
+[root@almalinux-9 ~]# cd ~/rpmbuild/SPECS/
+[root@almalinux-9 SPECS]#
+[root@almalinux-9 ~]# cd ~/rpmbuild/SPECS/
+[root@almalinux-9 SPECS]# 
+[root@almalinux-9 SPECS]# rpmbuild -ba nginx.spec -D 'debug_package %{nil}'
+setting SOURCE_DATE_EPOCH=1783382400
+Выполняется(%prep): /bin/sh -e /var/tmp/rpm-tmp.4WkgTr
++ umask 022
++ cd /root/rpmbuild/BUILD
+<...>
+perl(strict) perl(warnings)
+Проверка на неупакованный(е) файл(ы): /usr/lib/rpm/check-files /root/rpmbuild/BUILDROOT/nginx-1.20.1-28.el9.4.alma.1.x86_64
+Записан: /root/rpmbuild/SRPMS/nginx-1.20.1-28.el9.4.alma.1.src.rpm
+Записан: /root/rpmbuild/RPMS/x86_64/nginx-core-1.20.1-28.el9.4.alma.1.x86_64.rpm
+Записан: /root/rpmbuild/RPMS/x86_64/nginx-mod-stream-1.20.1-28.el9.4.alma.1.x86_64.rpm
+Записан: /root/rpmbuild/RPMS/x86_64/nginx-1.20.1-28.el9.4.alma.1.x86_64.rpm
+Записан: /root/rpmbuild/RPMS/x86_64/nginx-mod-mail-1.20.1-28.el9.4.alma.1.x86_64.rpm
+Записан: /root/rpmbuild/RPMS/x86_64/nginx-mod-http-perl-1.20.1-28.el9.4.alma.1.x86_64.rpm
+Записан: /root/rpmbuild/RPMS/x86_64/nginx-mod-http-image-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm
+Записан: /root/rpmbuild/RPMS/x86_64/nginx-mod-http-xslt-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm
+Записан: /root/rpmbuild/RPMS/noarch/nginx-filesystem-1.20.1-28.el9.4.alma.1.noarch.rpm
+Записан: /root/rpmbuild/RPMS/noarch/nginx-all-modules-1.20.1-28.el9.4.alma.1.noarch.rpm
+Записан: /root/rpmbuild/RPMS/x86_64/nginx-mod-devel-1.20.1-28.el9.4.alma.1.x86_64.rpm
+Выполняется(%clean): /bin/sh -e /var/tmp/rpm-tmp.joKSXj
++ umask 022
++ cd /root/rpmbuild/BUILD
++ cd nginx-1.20.1
++ /usr/bin/rm -rf /root/rpmbuild/BUILDROOT/nginx-1.20.1-28.el9.4.alma.1.x86_64
++ RPM_EC=0
+++ jobs -p
++ exit 0
+[root@almalinux-9 SPECS]# 
+[root@almalinux-9 SPECS]#
+[root@almalinux-9 SPECS]# cd ~
+[root@almalinux-9 ~]# ll rpmbuild/RPMS/x86_64/
+итого 2020
+-rw-r--r--. 1 root root   38286 июл 29 15:20 nginx-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root 1033130 июл 29 15:20 nginx-core-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root  763092 июл 29 15:20 nginx-mod-devel-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   21363 июл 29 15:20 nginx-mod-http-image-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   32894 июл 29 15:20 nginx-mod-http-perl-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   20169 июл 29 15:20 nginx-mod-http-xslt-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   55773 июл 29 15:20 nginx-mod-mail-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   82360 июл 29 15:20 nginx-mod-stream-1.20.1-28.el9.4.alma.1.x86_64.rpm
+[root@almalinux-9 ~]# 
+[root@almalinux-9 ~]# ~/rpmbuild/RPMS/noarch/*
+-bash: /root/rpmbuild/RPMS/noarch/nginx-all-modules-1.20.1-28.el9.4.alma.1.noarch.rpm: Отказано в доступе
+[root@almalinux-9 ~]# ll ~/rpmbuild/RPMS/noarch/*
+-rw-r--r--. 1 root root  9377 июл 29 15:20 /root/rpmbuild/RPMS/noarch/nginx-all-modules-1.20.1-28.el9.4.alma.1.noarch.rpm
+-rw-r--r--. 1 root root 10977 июл 29 15:20 /root/rpmbuild/RPMS/noarch/nginx-filesystem-1.20.1-28.el9.4.alma.1.noarch.rpm
+[root@almalinux-9 ~]# 
+[root@almalinux-9 ~]# cp ~/rpmbuild/RPMS/noarch/* ~/rpmbuild/RPMS/x86_64/
+[root@almalinux-9 ~]# 
+[root@almalinux-9 ~]# ll rpmbuild/RPMS/x86_64/
+итого 2044
+-rw-r--r--. 1 root root   38286 июл 29 15:20 nginx-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root    9377 июл 29 15:23 nginx-all-modules-1.20.1-28.el9.4.alma.1.noarch.rpm
+-rw-r--r--. 1 root root 1033130 июл 29 15:20 nginx-core-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   10977 июл 29 15:23 nginx-filesystem-1.20.1-28.el9.4.alma.1.noarch.rpm
+-rw-r--r--. 1 root root  763092 июл 29 15:20 nginx-mod-devel-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   21363 июл 29 15:20 nginx-mod-http-image-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   32894 июл 29 15:20 nginx-mod-http-perl-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   20169 июл 29 15:20 nginx-mod-http-xslt-filter-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   55773 июл 29 15:20 nginx-mod-mail-1.20.1-28.el9.4.alma.1.x86_64.rpm
+-rw-r--r--. 1 root root   82360 июл 29 15:20 nginx-mod-stream-1.20.1-28.el9.4.alma.1.x86_64.rpm
+[root@almalinux-9 ~]#
+```
+
+3. Установка собранного пакета в систему:
+
+```
+[root@almalinux-9 x86_64]# yum localinstall *.rpm
+Последняя проверка окончания срока действия метаданных: 1:43:04 назад, Ср 29 июл 2026 13:44:09.
+Зависимости разрешены.
+============================================================================================================================================================
+ Пакет                                          Архитектура               Версия                                      Репозиторий                     Размер
+============================================================================================================================================================
+Установка:
+ nginx                                          x86_64                    2:1.20.1-28.el9.4.alma.1                    @commandline                     37 k
+ nginx-all-modules                              noarch                    2:1.20.1-28.el9.4.alma.1                    @commandline                    9.2 k
+ nginx-core                                     x86_64                    2:1.20.1-28.el9.4.alma.1                    @commandline                    1.0 M
+ nginx-filesystem                               noarch                    2:1.20.1-28.el9.4.alma.1                    @commandline                     11 k
+ nginx-mod-devel                                x86_64                    2:1.20.1-28.el9.4.alma.1                    @commandline                    745 k
+ nginx-mod-http-image-filter                    x86_64                    2:1.20.1-28.el9.4.alma.1                    @commandline                     21 k
+ nginx-mod-http-perl                            x86_64                    2:1.20.1-28.el9.4.alma.1                    @commandline                     32 k
+ nginx-mod-http-xslt-filter                     x86_64                    2:1.20.1-28.el9.4.alma.1                    @commandline                     20 k
+ nginx-mod-mail                                 x86_64                    2:1.20.1-28.el9.4.alma.1                    @commandline                     54 k
+ nginx-mod-stream                               x86_64                    2:1.20.1-28.el9.4.alma.1                    @commandline                     80 k
+Установка зависимостей:
+ almalinux-logos-httpd                          noarch                    90.7-1.el9                                  appstream                        18 k
+
+Результат транзакции
+============================================================================================================================================================
+Установка  11 Пакетов
+<...>
+Установлен:
+  almalinux-logos-httpd-90.7-1.el9.noarch                                          nginx-2:1.20.1-28.el9.4.alma.1.x86_64                                   
+  nginx-all-modules-2:1.20.1-28.el9.4.alma.1.noarch                                nginx-core-2:1.20.1-28.el9.4.alma.1.x86_64                              
+  nginx-filesystem-2:1.20.1-28.el9.4.alma.1.noarch                                 nginx-mod-devel-2:1.20.1-28.el9.4.alma.1.x86_64                         
+  nginx-mod-http-image-filter-2:1.20.1-28.el9.4.alma.1.x86_64                      nginx-mod-http-perl-2:1.20.1-28.el9.4.alma.1.x86_64                     
+  nginx-mod-http-xslt-filter-2:1.20.1-28.el9.4.alma.1.x86_64                       nginx-mod-mail-2:1.20.1-28.el9.4.alma.1.x86_64                          
+  nginx-mod-stream-2:1.20.1-28.el9.4.alma.1.x86_64                                
+
+Выполнено!
+```
+
+4. Включаем и настраиваем установленный nginx, конфигурируем, создаём тестовы файл и проверяем работы компрессии brotli - компрессия работает:
+
+```
+[root@almalinux-9 x86_64]#  systemctl start nginx
+[root@almalinux-9 x86_64]#  systemctl status nginx
+● nginx.service - The nginx HTTP and reverse proxy server
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service; disabled; preset: disabled)
+     Active: active (running) since Wed 2026-07-29 15:27:45 MSK; 3s ago
+<...>
+[root@almalinux-9 x86_64]# nginx -V
+nginx version: nginx/1.20.1
+built by gcc 11.5.0 20240719 (Red Hat 11.5.0-14) (GCC) 
+built with OpenSSL 3.5.5 27 Jan 2026
+TLS SNI support enabled
+configure arguments: --prefix=/usr/share/nginx --sbin-path=/usr/sbin/nginx --modules-path=/usr/lib64/nginx/modules --conf-path=/etc/nginx/nginx.conf --error-log-path=/var/log/nginx/error.log --http-log-path=/var/log/nginx/access.log --http-client-body-temp-path=/var/lib/nginx/tmp/client_body --http-proxy-temp-path=/var/lib/nginx/tmp/proxy --http-fastcgi-temp-path=/var/lib/nginx/tmp/fastcgi --http-uwsgi-temp-path=/var/lib/nginx/tmp/uwsgi --http-scgi-temp-path=/var/lib/nginx/tmp/scgi --pid-path=/run/nginx.pid --lock-path=/run/lock/subsys/nginx --user=nginx --group=nginx --with-compat --with-debug --with-file-aio --with-http_addition_module --with-http_auth_request_module --with-http_dav_module --with-http_degradation_module --with-http_flv_module --with-http_gunzip_module --with-http_gzip_static_module --with-http_image_filter_module=dynamic --with-http_mp4_module --with-http_perl_module=dynamic --with-http_random_index_module --with-http_realip_module --with-http_secure_link_module --with-http_slice_module --with-http_ssl_module --with-http_stub_status_module --with-http_sub_module --with-http_v2_module --with-http_xslt_module=dynamic --with-mail=dynamic --with-mail_ssl_module --with-pcre --with-pcre-jit --with-stream=dynamic --with-stream_ssl_module --with-stream_ssl_preread_module --with-threads --add-module=/root/ngx_brotli --with-cc-opt='-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection' --with-ld-opt='-Wl,-z,relro -Wl,--as-needed -Wl,-z,now -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -Wl,-E'
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# echo "test brotli compression" > /usr/share/nginx/html/brotli-test.txt
+[root@almalinux-9 x86_64]#
+[root@almalinux-9 x86_64]#  systemctl cat nginx
+# /usr/lib/systemd/system/nginx.service
+[Unit]
+Description=The nginx HTTP and reverse proxy server
+After=network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=/run/nginx.pid
+# Nginx will fail to start if /run/nginx.pid already exists but has the wrong
+# SELinux context. This might happen when running `nginx -t` from the cmdline.
+# https://bugzilla.redhat.com/show_bug.cgi?id=1268621
+ExecStartPre=/usr/bin/rm -f /run/nginx.pid
+ExecStartPre=/usr/sbin/nginx -t
+ExecStart=/usr/sbin/nginx
+ExecReload=/usr/sbin/nginx -s reload
+KillSignal=SIGQUIT
+TimeoutStopSec=5
+KillMode=mixed
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# vi /etc/nginx/nginx.conf
+[root@almalinux-9 x86_64]#
+[root@almalinux-9 x86_64]# cat /etc/nginx/nginx.conf
+# For more information on configuration, see:
+#   * Official English Documentation: http://nginx.org/en/docs/
+#   * Official Russian Documentation: http://nginx.org/ru/docs/
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+
+# Load dynamic modules. See /usr/share/doc/nginx/README.dynamic.
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    # Включаем Brotli глобально
+    brotli on;
+    brotli_comp_level 6;  # 6 — хороший баланс скорость/сжатие (4 был для теста)
+    
+    # Явно указываем типы, которые хотим сжимать
+    brotli_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/xml
+        font/ttf font/woff font/woff2;
+
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    # Load modular configuration files from the /etc/nginx/conf.d directory.
+    # See http://nginx.org/en/docs/ngx_core_module.html#include
+    # for more information.
+    include /etc/nginx/conf.d/*.conf;
+
+    server {
+        listen       80;
+        listen       [::]:80;
+        server_name  _;
+        root         /usr/share/nginx/html;
+        
+      	index index.html index.htm;
+
+        # В корне сайта автоиндекс выключен (никакой директивы нет → значит off)
+        location / {
+            index index.html index.htm;
+            # Если в / нет index.html, будет 403 Forbidden, а не список файлов
+        }
+
+        # А вот тут ты явно включаешь автоиндекс только для этой папки
+        location /repo/ {
+            autoindex on;
+            autoindex_exact_size off;
+        }
+
+        # Load configuration files for the default server block.
+        include /etc/nginx/default.d/*.conf;
+
+        error_page 404 /404.html;
+        location = /404.html {
+        }
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+        }
+    }
+} 
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]#  systemctl restart nginx
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]#  systemctl status nginx
+● nginx.service - The nginx HTTP and reverse proxy server
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service; disabled; preset: disabled)
+     Active: active (running) since Wed 2026-07-29 15:38:15 MSK; 5s ago
+    Process: 36770 ExecStartPre=/usr/bin/rm -f /run/nginx.pid (code=exited, status=0/SUCCESS)
+<...>
+[root@almalinux-9 x86_64]# grep -A 5 'server {' /etc/nginx/nginx.conf | grep root
+        root         /usr/share/nginx/html;
+[root@almalinux-9 x86_64]#
+root@almalinux-9 x86_64]# nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]#  systemctl reload nginx
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# curl -v -H "Accept-Encoding: br" http://localhost/brotli-test-big.txt 2>&1 | grep -i 'x-brotli-big-test\|content-encoding'
+< X-Brotli-Big-Test: YES
+< Content-Encoding: br
+[root@almalinux-9 x86_64]#
+[root@almalinux-9 x86_64]# yes "test brotli static module — repeat this line many times to make the file large enough for compression" | head -n 1000 > /usr/share/nginx/html/brotli-test-big.txt
+[root@almalinux-9 x86_64]#
+[root@almalinux-9 x86_64]# nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]#  systemctl reload nginx
+[root@almalinux-9 x86_64]# 
+[root@almalinux-9 x86_64]# curl -H "Accept-Encoding: gzip,deflate" -o /dev/null -w "%{size_download}\n" http://localhost/brotli-test-big.txt
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  101k  100  101k    0     0  11.0M      0 --:--:-- --:--:-- --:--:-- 11.0M
+104000
+[root@almalinux-9 x86_64]# curl -H "Accept-Encoding: br" -o /dev/null -w "%{size_download}\n" http://localhost/brotli-test-big.txt
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100    92    0    92    0     0  13142      0 --:--:-- --:--:-- --:--:-- 13142
+92
+[root@almalinux-9 x86_64]#
+```
+
+5. Создаём репозиторий для RPM-файлов, размещаем в нём файлы созданного пакета:
+
+```
+
+```
+
+После этого на клиентской машине в броузере видно содержимое созданного репозитория:
+
+<img width="953" height="502" alt="изображение" src="https://github.com/user-attachments/assets/49b09801-7375-4fcb-ab46-ec9026b9c37c" />
+
+
+
+# 1.1.  Сборка пакета RPM nginx в базовой конфигурации без дополнительных модулей и флагов (для упрощения процесса) на ОС AlmaLinux 9.8 (DNF/YUM/RPM-based): 
+
+Данный пункт выполнялся путём проб и ошибок с использованием поиска в Интернет и рекомендаций Яндекс ИИ, цель была собрать стандартный пакет RPM для репозитория стандартной утилитой.
 
 
 # 3. На ОС Ubuntu 24.04 (APT/DPKG-based): 
