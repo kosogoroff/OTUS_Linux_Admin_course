@@ -70,7 +70,7 @@ Linux almalinux-9 5.14.0-687.29.1.el9_8.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Jul 23
 
 
 
-# 2. На ОС Ubuntu 24.04 (APT/DPKG-based): 
+# 3. На ОС Ubuntu 24.04 (APT/DPKG-based): 
 
 Данный пункт выполнялся путём проб и ошибок с использованием поиска в Интернет и рекомендаций Яндекс ИИ, цель была собрать рабочий пакет
 и проверить его работу.
@@ -293,7 +293,7 @@ kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$
 
 ```
 
-2. Сборка DEB-пакета в данном варианте была осложнена внесёнными в пакет изменениями при добавлении модулю, с помощью стандартной утилиты debuild DEB-пакет собрать не удалось. DEB-пакет с ограниченными возможностями (например, не создающего настройки systemctl при установке) удалось создать с помощью утилиты fpm:
+2. Сборка DEB-пакета в данном варианте была осложнена внесёнными в пакет изменениями при добавлении модулю, с помощью стандартной утилиты debuild DEB-пакет собрать не удалось. DEB-пакет с ограниченными возможностями (например, не создающего настройки systemctl при установке) удалось создать с помощью утилиты fpm (которая собирает DEB-пакет из директорий установленного пакета):
 
 ```
 kosogor@vm1-server:~/nginx-brotli-build/nginx-1.24.0$ sudo apt install ruby-dev build-essential
@@ -609,7 +609,8 @@ root@vm1-server:/var/local/repo/nginx-brotli#
 ```
 
 5. Затем созданные репозиторий был подключен на клиентской машине (в данном случае, клиентской машиной являлся тот же компьютер) двумя способами:
-как локальный репозиторий через file:// и через http:// с использованием сконфигурированного сервера nginx с модулем brontli :
+как локальный репозиторий через file:// и через http:// с использованием сконфигурированного сервера nginx с модулем brontli - оба репозитория видны
+после подключения при 'apt update ' и пакет nginx-brotli виден в обоих репозиториях  :
 
 ```
 root@vm1-server:/var/local/repo/nginx-brotli# echo "deb [trusted=yes] file:///var/local/repo/nginx-brotli ./" | sudo tee /etc/apt/sources.list.d/local-nginx-brotli.list
@@ -961,4 +962,981 @@ deb [trusted=yes] http://localhost/repo/nginx-brotli ./
 root@vm1-server:/var/local/repo/nginx-brotli# 
 ```
 
--  на клиентской машине подключение репозитория как локального через file:// и по http:// с сервера nginx.
+# 4. На ОС Ubuntu 24.04 (APT/DPKG-based): 
+
+Данный пункт выполнялся путём проб и ошибок с использованием поиска в Интернет и рекомендаций Яндекс ИИ, цель была собрать стандартный пакет DEB для репозитория стандартной утилитой debuild.
+
+## 0. Чистая ВМ с ОС Ubuntu 24.04
+
+```
+kosogor@kosogor:~$ uname -a
+Linux kosogor 6.8.0-100-generic #100-Ubuntu SMP PREEMPT_DYNAMIC Tue Jan 13 16:40:06 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+kosogor@kosogor:~$ cat /etc/os-release | grep PRETTY_NAME
+PRETTY_NAME="Ubuntu 24.04.4 LTS"
+kosogor@kosogor:~$
+```
+
+1. Установка необходимых для сборки пакетов:
+
+```
+kosogor@kosogor:~$ sudo apt update
+[sudo] password for kosogor: 
+Пол:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Сущ:2 http://us.archive.ubuntu.com/ubuntu noble InRelease
+<...>
+Чтение информации о состоянии… Готово         
+Может быть обновлено 179 пакетов. Запустите «apt list --upgradable» для их показа.
+kosogor@kosogor:~$
+kosogor@kosogor:~$ sudo apt install devscripts build-essential fakeroot dh-make quilt
+Чтение списков пакетов… Готово
+Построение дерева зависимостей… Готово
+Чтение информации о состоянии… Готово         
+Будут установлены следующие дополнительные пакеты:
+<...>
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+kosogor@kosogor:~$
+```
+
+2. Скачиваем исходники пакета nginx:
+
+```
+kosogor@kosogor:~$ wget https://nginx.org/download/nginx-1.24.0.tar.gz
+--2026-07-30 03:23:57--  https://nginx.org/download/nginx-1.24.0.tar.gz
+Resolving nginx.org (nginx.org)... 3.125.197.172, 2a05:d014:5c0:2600::6, 2a05:d014:5c0:2601::6
+Connecting to nginx.org (nginx.org)|3.125.197.172|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 1112471 (1,1M) [application/octet-stream]
+Saving to: ‘nginx-1.24.0.tar.gz’
+
+nginx-1.24.0.tar.gz                    100%[============================================================================>]   1,06M  1,53MB/s    in 0,7s    
+
+2026-07-30 03:23:58 (1,53 MB/s) - ‘nginx-1.24.0.tar.gz’ saved [1112471/1112471]
+
+kosogor@kosogor:~$
+kosogor@kosogor:~$ tar xzf nginx-1.24.0.tar.gz
+kosogor@kosogor:~$ ll
+total 1128
+drwxr-x--- 5 kosogor kosogor    4096 июл 30 03:24 ./
+drwxr-xr-x 3 root    root       4096 июн 25 06:37 ../
+-rw------- 1 kosogor kosogor    1830 июн 25 09:14 .bash_history
+-rw-r--r-- 1 kosogor kosogor     220 мар 31  2024 .bash_logout
+-rw-r--r-- 1 kosogor kosogor    3771 мар 31  2024 .bashrc
+drwx------ 2 kosogor kosogor    4096 июн 25 06:42 .cache/
+drwxr-xr-x 8 kosogor kosogor    4096 апр 11  2023 nginx-1.24.0/
+-rw-rw-r-- 1 kosogor kosogor 1112471 апр 11  2023 nginx-1.24.0.tar.gz
+-rw-r--r-- 1 kosogor kosogor     807 мар 31  2024 .profile
+drwx------ 2 kosogor kosogor    4096 июн 25 06:42 .ssh/
+-rw-r--r-- 1 kosogor kosogor       0 июн 25 06:43 .sudo_as_admin_successful
+-rw-rw-r-- 1 kosogor kosogor     164 июл 30 03:23 .wget-hsts
+kosogor@kosogor:~$ cd nginx-1.24.0
+kosogor@kosogor:~/nginx-1.24.0$ ll
+total 844
+drwxr-xr-x 8 kosogor kosogor   4096 апр 11  2023 ./
+drwxr-x--- 5 kosogor kosogor   4096 июл 30 03:24 ../
+drwxr-xr-x 6 kosogor kosogor   4096 июл 30 03:24 auto/
+-rw-r--r-- 1 kosogor kosogor 323312 апр 11  2023 CHANGES
+-rw-r--r-- 1 kosogor kosogor 494234 апр 11  2023 CHANGES.ru
+drwxr-xr-x 2 kosogor kosogor   4096 июл 30 03:24 conf/
+-rwxr-xr-x 1 kosogor kosogor   2611 апр 11  2023 configure*
+drwxr-xr-x 4 kosogor kosogor   4096 июл 30 03:24 contrib/
+drwxr-xr-x 2 kosogor kosogor   4096 июл 30 03:24 html/
+-rw-r--r-- 1 kosogor kosogor   1397 апр 11  2023 LICENSE
+drwxr-xr-x 2 kosogor kosogor   4096 июл 30 03:24 man/
+-rw-r--r-- 1 kosogor kosogor     49 апр 11  2023 README
+drwxr-xr-x 9 kosogor kosogor   4096 июл 30 03:24 src/
+kosogor@kosogor:~/nginx-1.24.0$ 
+```
+
+2. Создаём необходимую структуру директорий, заполняем необходимые для компиляции и сборки файлы debian/control , debian/rules , debian/changelog :
+
+```
+kosogor@kosogor:~/nginx-1.24.0$ dh_make -s -y
+Maintainer Name     : Eugene Kosogorov
+Email-Address       : kosogor@unknown
+Date                : Thu, 30 Jul 2026 03:25:13 +0000
+Package Name        : nginx
+Version             : 1.24.0
+License             : blank
+Package Type        : single
+
+Could not find nginx_1.24.0.orig.tar.xz
+Either specify an alternate file to use with -f,
+or add --createorig to create one.
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ cd ..
+kosogor@kosogor:~$
+kosogor@kosogor:~$ tar --owner=0 --group=0 --numeric-owner -cJf nginx_1.24.0.orig.tar.xz nginx-1.24.0
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ cd nginx-1.24.0
+kosogor@kosogor:~/nginx-1.24.0$ dh_make -s -y
+Maintainer Name     : Eugene Kosogorov
+Email-Address       : kosogor@unknown
+Date                : Thu, 30 Jul 2026 03:30:01 +0000
+Package Name        : nginx
+Version             : 1.24.0
+License             : blank
+Package Type        : single
+Skipping creating ../nginx_1.24.0.orig.tar.xz because it already exists
+Done. Please edit the files in the debian/ subdirectory now.
+
+kosogor@kosogor:~/nginx-1.24.0$ ll
+total 848
+drwxr-xr-x 9 kosogor kosogor   4096 июл 30 03:30 ./
+drwxr-x--- 5 kosogor kosogor   4096 июл 30 03:29 ../
+drwxr-xr-x 6 kosogor kosogor   4096 июл 30 03:24 auto/
+-rw-r--r-- 1 kosogor kosogor 323312 апр 11  2023 CHANGES
+-rw-r--r-- 1 kosogor kosogor 494234 апр 11  2023 CHANGES.ru
+drwxr-xr-x 2 kosogor kosogor   4096 июл 30 03:24 conf/
+-rwxr-xr-x 1 kosogor kosogor   2611 апр 11  2023 configure*
+drwxr-xr-x 4 kosogor kosogor   4096 июл 30 03:24 contrib/
+drwxr-xr-x 4 kosogor kosogor   4096 июл 30 03:30 debian/
+drwxr-xr-x 2 kosogor kosogor   4096 июл 30 03:24 html/
+-rw-r--r-- 1 kosogor kosogor   1397 апр 11  2023 LICENSE
+drwxr-xr-x 2 kosogor kosogor   4096 июл 30 03:24 man/
+-rw-r--r-- 1 kosogor kosogor     49 апр 11  2023 README
+drwxr-xr-x 9 kosogor kosogor   4096 июл 30 03:24 src/
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ vi debian/control
+kosogor@kosogor:~/nginx-1.24.0$ cat debian/control
+Source: nginx
+Section: web
+Priority: optional
+Maintainer: Your Name <your@email.com>
+Build-Depends: debhelper (>= 13), build-essential, libpcre3-dev, zlib1g-dev, openssl, dh-autoreconf
+Standards-Version: 4.5.1
+
+Package: nginx
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: nginx web server
+ A high performance reverse proxy and web server.
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ vi debian/rules
+kosogor@kosogor:~/nginx-1.24.0$ cat debian/rules
+#!/usr/bin/make -f
+%:
+	dh $@
+override_dh_auto_configure:
+	./configure --prefix=/usr \
+		--sbin-path=/usr/sbin/nginx \
+		--conf-path=/etc/nginx/nginx.conf \
+		--error-log-path=/var/log/nginx/error.log \
+		--http-log-path=/var/log/nginx/access.log \
+		--with-http_ssl_module \
+		--with-pcre \
+		--with-zlib
+override_dh_auto_build:
+	make
+override_dh_auto_test:
+	# тесты пропускаем для простоты
+override_dh_auto_install:
+	make install DESTDIR=$(CURDIR)/debian/tmp
+
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ chmod +x debian/rules
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ echo "usr/sbin/nginx usr/sbin/" > debian/install
+echo "etc/nginx etc/" >> debian/install
+kosogor@kosogor:~/nginx-1.24.0$ 
+kosogor@kosogor:~/nginx-1.24.0$ cat debian/install 
+usr/sbin/nginx usr/sbin/
+etc/nginx etc/
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ cat debian/changelog
+nginx (1.24.0-1) UNRELEASED; urgency=medium
+
+  * Initial release. (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- Eugene Kosogorov <kosogor@unknown>  Thu, 30 Jul 2026 03:30:01 +0000
+kosogor@kosogor:~/nginx-1.24.0$
+```
+
+3. Запускаем компиляцию, по возникающим сообщениям доустанавливаем недостающие пакеты, правим файлы debian/compat и debian/control:
+
+```
+kosogor@kosogor:~/nginx-1.24.0$ debuild -us -uc
+ dpkg-buildpackage -us -uc -ui
+dpkg-buildpackage: info: source package nginx
+dpkg-buildpackage: info: source version 1.24.0-1
+dpkg-buildpackage: info: source distribution UNRELEASED
+dpkg-buildpackage: info: source changed by Eugene Kosogorov <kosogor@unknown>
+ dpkg-source --before-build .
+dpkg-buildpackage: info: host architecture amd64
+dpkg-checkbuilddeps: error: Unmet build dependencies: libpcre3-dev zlib1g-dev
+dpkg-buildpackage: warning: build dependencies/conflicts unsatisfied; aborting
+dpkg-buildpackage: warning: (Use -d flag to override.)
+debuild: fatal error at line 1184:
+dpkg-buildpackage -us -uc -ui failed
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ sudo apt install libpcre3-dev zlib1g-dev
+Чтение списков пакетов… Готово
+Построение дерева зависимостей… Готово
+Чтение информации о состоянии… Готово         
+Будут установлены следующие дополнительные пакеты:
+  libpcre16-3 libpcre3 libpcre32-3 libpcrecpp0v5
+Следующие НОВЫЕ пакеты будут установлены:
+  libpcre16-3 libpcre3 libpcre3-dev libpcre32-3 libpcrecpp0v5 zlib1g-dev
+<...>
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ debuild -us -uc
+ dpkg-buildpackage -us -uc -ui
+dpkg-buildpackage: info: source package nginx
+dpkg-buildpackage: info: source version 1.24.0-1
+dpkg-buildpackage: info: source distribution UNRELEASED
+dpkg-buildpackage: info: source changed by Eugene Kosogorov <kosogor@unknown>
+ dpkg-source --before-build .
+dpkg-buildpackage: info: host architecture amd64
+dpkg-checkbuilddeps: error: Unmet build dependencies: debhelper (= 13)
+dpkg-buildpackage: warning: build dependencies/conflicts unsatisfied; aborting
+dpkg-buildpackage: warning: (Use -d flag to override.)
+debuild: fatal error at line 1184:
+dpkg-buildpackage -us -uc -ui failed
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ echo "13" > debian/compat
+kosogor@kosogor:~/nginx-1.24.0$ 
+kosogor@kosogor:~/nginx-1.24.0$ cat debian/compat
+13
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ debuild -us -uc
+ dpkg-buildpackage -us -uc -ui
+dpkg-buildpackage: info: source package nginx
+dpkg-buildpackage: info: source version 1.24.0-1
+dpkg-buildpackage: info: source distribution UNRELEASED
+dpkg-buildpackage: info: source changed by Eugene Kosogorov <kosogor@unknown>
+ dpkg-source --before-build .
+dpkg-buildpackage: info: host architecture amd64
+ fakeroot debian/rules clean
+dh clean
+   dh_clean
+ dpkg-source -b .
+dpkg-source: info: using source format '3.0 (quilt)'
+dpkg-source: info: building nginx using existing ./nginx_1.24.0.orig.tar.xz
+dpkg-source: info: building nginx in nginx_1.24.0-1.debian.tar.xz
+dpkg-source: info: building nginx in nginx_1.24.0-1.dsc
+ debian/rules build
+dh build
+   dh_update_autotools_config
+   dh_autoreconf
+   debian/rules override_dh_auto_configure
+make[1]: Entering directory '/home/kosogor/nginx-1.24.0'
+./configure --prefix=/usr \
+	--sbin-path=/usr/sbin/nginx \
+	--conf-path=/etc/nginx/nginx.conf \
+	--error-log-path=/var/log/nginx/error.log \
+	--http-log-path=/var/log/nginx/access.log \
+	--with-http_ssl_module \
+	--with-pcre \
+	--with-zlib
+./configure: error: invalid option "--with-zlib"
+make[1]: *** [debian/rules:5: override_dh_auto_configure] Error 1
+make[1]: Leaving directory '/home/kosogor/nginx-1.24.0'
+make: *** [debian/rules:3: build] Error 2
+dpkg-buildpackage: error: debian/rules build subprocess returned exit status 2
+debuild: fatal error at line 1184:
+dpkg-buildpackage -us -uc -ui failed
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ vi debian/rules
+kosogor@kosogor:~/nginx-1.24.0$ 
+kosogor@kosogor:~/nginx-1.24.0$ cat debian/rules
+#!/usr/bin/make -f
+%:
+	dh $@
+override_dh_auto_configure:
+	./configure --prefix=/usr \
+		--sbin-path=/usr/sbin/nginx \
+		--conf-path=/etc/nginx/nginx.conf \
+		--error-log-path=/var/log/nginx/error.log \
+		--http-log-path=/var/log/nginx/access.log \
+		--with-http_ssl_module \
+		--with-pcre
+override_dh_auto_build:
+	make
+override_dh_auto_test:
+	# тесты пропускаем для простоты
+override_dh_auto_install:
+	make install DESTDIR=$(CURDIR)/debian/tmp
+
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ debuild -us -uc
+ dpkg-buildpackage -us -uc -ui
+dpkg-buildpackage: info: source package nginx
+dpkg-buildpackage: info: source version 1.24.0-1
+dpkg-buildpackage: info: source distribution UNRELEASED
+dpkg-buildpackage: info: source changed by Eugene Kosogorov <kosogor@unknown>
+ dpkg-source --before-build .
+dpkg-buildpackage: info: host architecture amd64
+ fakeroot debian/rules clean
+dh clean
+   dh_clean
+ dpkg-source -b .
+dpkg-source: info: using source format '3.0 (quilt)'
+dpkg-source: info: building nginx using existing ./nginx_1.24.0.orig.tar.xz
+dpkg-source: info: building nginx in nginx_1.24.0-1.debian.tar.xz
+dpkg-source: info: building nginx in nginx_1.24.0-1.dsc
+ debian/rules build
+dh build
+   dh_update_autotools_config
+   dh_autoreconf
+   debian/rules override_dh_auto_configure
+make[1]: Entering directory '/home/kosogor/nginx-1.24.0'
+./configure --prefix=/usr \
+	--sbin-path=/usr/sbin/nginx \
+	--conf-path=/etc/nginx/nginx.conf \
+	--error-log-path=/var/log/nginx/error.log \
+	--http-log-path=/var/log/nginx/access.log \
+	--with-http_ssl_module \
+	--with-pcre
+checking for OS
+ + Linux 6.8.0-100-generic x86_64
+checking for C compiler ... found
+ + using GNU C compiler
+checking for -Wl,-E switch ... found
+checking for gcc builtin atomic operations ... found
+<...>
+./configure: error: SSL modules require the OpenSSL library.
+You can either do not enable the modules, or install the OpenSSL library
+into the system, or build the OpenSSL library statically from the source
+with nginx by using --with-openssl=<path> option.
+
+make[1]: *** [debian/rules:5: override_dh_auto_configure] Error 1
+make[1]: Leaving directory '/home/kosogor/nginx-1.24.0'
+make: *** [debian/rules:3: build] Error 2
+dpkg-buildpackage: error: debian/rules build subprocess returned exit status 2
+debuild: fatal error at line 1184:
+dpkg-buildpackage -us -uc -ui failed
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ sudo apt install libssl-dev
+тение списков пакетов… Готово
+Построение дерева зависимостей… Готово
+Чтение информации о состоянии… Готово         
+Будут установлены следующие дополнительные пакеты:
+  libssl3t64 openssl
+<...>
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ debuild -us -uc
+ dpkg-buildpackage -us -uc -ui
+dpkg-buildpackage: info: source package nginx
+dpkg-buildpackage: info: source version 1.24.0-1
+dpkg-buildpackage: info: source distribution UNRELEASED
+dpkg-buildpackage: info: source changed by Eugene Kosogorov <kosogor@unknown>
+ dpkg-source --before-build .
+dpkg-buildpackage: info: host architecture amd64
+ fakeroot debian/rules clean
+dh clean
+   dh_auto_clean
+	make -j3 clean
+make[1]: Entering directory '/home/kosogor/nginx-1.24.0'
+rm -rf Makefile objs
+make[1]: Leaving directory '/home/kosogor/nginx-1.24.0'
+   dh_clean
+ dpkg-source -b .
+dpkg-source: info: using source format '3.0 (quilt)'
+dpkg-source: info: building nginx using existing ./nginx_1.24.0.orig.tar.xz
+dpkg-source: info: building nginx in nginx_1.24.0-1.debian.tar.xz
+dpkg-source: info: building nginx in nginx_1.24.0-1.dsc
+ debian/rules build
+dh build
+   dh_update_autotools_config
+   dh_autoreconf
+   debian/rules override_dh_auto_configure
+make[1]: Entering directory '/home/kosogor/nginx-1.24.0'
+./configure --prefix=/usr \
+	--sbin-path=/usr/sbin/nginx \
+	--conf-path=/etc/nginx/nginx.conf \
+	--error-log-path=/var/log/nginx/error.log \
+	--http-log-path=/var/log/nginx/access.log \
+	--with-http_ssl_module \
+	--with-pcre
+checking for OS
+ + Linux 6.8.0-100-generic x86_64
+<...>
+dh_missing: warning: usr/html/50x.html exists in debian/tmp but is not installed to anywhere 
+dh_missing: warning: usr/html/index.html exists in debian/tmp but is not installed to anywhere 
+dh_missing: error: missing files, aborting
+	The following debhelper tools have reported what they installed (with files per package)
+	 * dh_install: nginx (2)
+	 * dh_installdocs: nginx (0)
+	If the missing files are installed by another tool, please file a bug against it.
+	When filing the report, if the tool is not part of debhelper itself, please reference the
+	"Logging helpers and dh_missing" section from the "PROGRAMMING" guide for debhelper (10.6.3+).
+	  (in the debhelper package: /usr/share/doc/debhelper/PROGRAMMING.md.gz)
+	Be sure to test with dpkg-buildpackage -A/-B as the results may vary when only a subset is built
+	If the omission is intentional or no other helper can take care of this consider adding the
+	paths to debian/not-installed.
+make: *** [debian/rules:3: binary] Error 255
+dpkg-buildpackage: error: fakeroot debian/rules binary subprocess returned exit status 2
+debuild: fatal error at line 1184:
+dpkg-buildpackage -us -uc -ui failed
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~/nginx-1.24.0$ echo "usr/html /usr/share/nginx" > debian/install
+echo "usr/sbin/nginx usr/sbin/" >> debian/install
+echo "etc/nginx etc/" >> debian/install
+kosogor@kosogor:~/nginx-1.24.0$ 
+kosogor@kosogor:~/nginx-1.24.0$ cat debian/install
+usr/html /usr/share/nginx
+usr/sbin/nginx usr/sbin/
+etc/nginx etc/
+kosogor@kosogor:~/nginx-1.24.0$ 
+kosogor@kosogor:~/nginx-1.24.0$ debuild -us -uc
+ dpkg-buildpackage -us -uc -ui
+dpkg-buildpackage: info: source package nginx
+dpkg-buildpackage: info: source version 1.24.0-1
+dpkg-buildpackage: info: source distribution UNRELEASED
+dpkg-buildpackage: info: source changed by Eugene Kosogorov <kosogor@unknown>
+ dpkg-source --before-build .
+dpkg-buildpackage: info: host architecture amd64
+ fakeroot debian/rules clean
+dh clean
+   dh_auto_clean
+	make -j3 clean
+make[1]: Entering directory '/home/kosogor/nginx-1.24.0'
+rm -rf Makefile objs
+make[1]: Leaving directory '/home/kosogor/nginx-1.24.0'
+   dh_clean
+ dpkg-source -b .
+dpkg-source: info: using source format '3.0 (quilt)'
+dpkg-source: info: building nginx using existing ./nginx_1.24.0.orig.tar.xz
+dpkg-source: info: building nginx in nginx_1.24.0-1.debian.tar.xz
+dpkg-source: info: building nginx in nginx_1.24.0-1.dsc
+ debian/rules build
+dh build
+   dh_update_autotools_config
+   dh_autoreconf
+   debian/rules override_dh_auto_configure
+make[1]: Entering directory '/home/kosogor/nginx-1.24.0'
+./configure --prefix=/usr \
+	--sbin-path=/usr/sbin/nginx \
+	--conf-path=/etc/nginx/nginx.conf \
+	--error-log-path=/var/log/nginx/error.log \
+	--http-log-path=/var/log/nginx/access.log \
+	--with-http_ssl_module \
+	--with-pcre
+checking for OS
+ + Linux 6.8.0-100-generic x86_64
+<...>
+W: nginx: readme-debian-contains-invalid-email-address kosogor@unknown [usr/share/doc/nginx/README.Debian]
+W: nginx source: space-in-std-shortname-in-dep5-copyright <special license> [debian/copyright:11]
+W: nginx source: useless-autoreconf-build-depends (does not need to satisfy dh-autoreconf:any)
+W: nginx: wrong-bug-number-in-closes #nnnn [usr/share/doc/nginx/changelog.Debian.gz:3]
+Finished running lintian.
+kosogor@kosogor:~/nginx-1.24.0$
+kosogor@kosogor:~$ dpkg -I nginx_1.24.0-1_amd64.deb
+ новый пакет Debian, версия 2.0.
+ размер 390198 байт(а): управляющий архив длиной 707 байт(а).
+     387 bytes,    15 lines      conffiles
+     328 bytes,    10 lines      control
+     450 bytes,     7 lines      md5sums
+ Package: nginx
+ Version: 1.24.0-1
+ Architecture: amd64
+ Maintainer: Your Name <your@email.com>
+ Installed-Size: 1018
+ Depends: libc6 (>= 2.34), libcrypt1 (>= 1:4.1.0), libpcre3, libssl3t64 (>= 3.0.0), zlib1g (>= 1:1.1.4)
+ Section: web
+ Priority: optional
+ Description: nginx web server
+  A high performance reverse proxy and web server.
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ dpkg -c nginx_1.24.0-1_amd64.deb | head -n 40
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./etc/
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./etc/nginx/
+-rw-r--r-- root/root      1077 2026-07-30 03:30 ./etc/nginx/fastcgi.conf
+-rw-r--r-- root/root      1077 2026-07-30 03:30 ./etc/nginx/fastcgi.conf.default
+-rw-r--r-- root/root      1007 2026-07-30 03:30 ./etc/nginx/fastcgi_params
+-rw-r--r-- root/root      1007 2026-07-30 03:30 ./etc/nginx/fastcgi_params.default
+-rw-r--r-- root/root      2837 2026-07-30 03:30 ./etc/nginx/koi-utf
+-rw-r--r-- root/root      2223 2026-07-30 03:30 ./etc/nginx/koi-win
+-rw-r--r-- root/root      5349 2026-07-30 03:30 ./etc/nginx/mime.types
+-rw-r--r-- root/root      5349 2026-07-30 03:30 ./etc/nginx/mime.types.default
+-rw-r--r-- root/root      2656 2026-07-30 03:30 ./etc/nginx/nginx.conf
+-rw-r--r-- root/root      2656 2026-07-30 03:30 ./etc/nginx/nginx.conf.default
+-rw-r--r-- root/root       636 2026-07-30 03:30 ./etc/nginx/scgi_params
+-rw-r--r-- root/root       636 2026-07-30 03:30 ./etc/nginx/scgi_params.default
+-rw-r--r-- root/root       664 2026-07-30 03:30 ./etc/nginx/uwsgi_params
+-rw-r--r-- root/root       664 2026-07-30 03:30 ./etc/nginx/uwsgi_params.default
+-rw-r--r-- root/root      3610 2026-07-30 03:30 ./etc/nginx/win-utf
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./usr/
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./usr/sbin/
+-rwxr-xr-x root/root    982432 2026-07-30 03:30 ./usr/sbin/nginx
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./usr/share/
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./usr/share/doc/
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./usr/share/doc/nginx/
+-rw-r--r-- root/root       176 2026-07-30 03:30 ./usr/share/doc/nginx/README.Debian
+-rw-r--r-- root/root       182 2026-07-30 03:30 ./usr/share/doc/nginx/changelog.Debian.gz
+-rw-r--r-- root/root      1908 2026-07-30 03:30 ./usr/share/doc/nginx/copyright
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./usr/share/doc-base/
+-rw-r--r-- root/root       493 2026-07-30 03:30 ./usr/share/doc-base/nginx.nginx
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./usr/share/nginx/
+drwxr-xr-x root/root         0 2026-07-30 03:30 ./usr/share/nginx/html/
+-rw-r--r-- root/root       497 2026-07-30 03:30 ./usr/share/nginx/html/50x.html
+-rw-r--r-- root/root       615 2026-07-30 03:30 ./usr/share/nginx/html/index.html
+kosogor@kosogor:~$ 
+```
+
+# 5. На ОС Ubuntu 24.04 (APT/DPKG-based), сборка в Docker: 
+
+Данный пункт выполнялся путём проб и ошибок с использованием поиска в Интернет и рекомендаций Яндекс ИИ, цель была собрать стандартный пакет DEB для репозитория стандартной утилитой debuild, сборка производилась в Docker.
+
+1. Подключаем репозиторий Docker, устанавливаем ключи репозитория Docker, устанавливаем Docker:
+
+```
+kosogor@kosogor:~$ sudo apt install -y ca-certificates curl gnupg lsb-release
+Чтение списков пакетов… Готово
+Построение дерева зависимостей… Готово
+Чтение информации о состоянии… Готово         
+Уже установлен пакет gnupg самой новой версии (2.4.4-2ubuntu17.4).
+gnupg помечен как установленный вручную.
+Уже установлен пакет lsb-release самой новой версии (12.0-2).
+lsb-release помечен как установленный вручную.
+Следующие пакеты будут обновлены:
+  ca-certificates curl libcurl3t64-gnutls libcurl4t64
+<...>
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo install -m 0755 -d /etc/apt/keyrings
+kosogor@kosogor:~$ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+kosogor@kosogor:~$ sudo chmod a+r /etc/apt/keyrings/docker.gpg
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ uname -a
+Linux kosogor 6.8.0-100-generic #100-Ubuntu SMP PREEMPT_DYNAMIC Tue Jan 13 16:40:06 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+kosogor@kosogor:~$ uname -r
+6.8.0-100-generic
+kosogor@kosogor:~$ cat /etc/os-release
+PRETTY_NAME="Ubuntu 24.04.4 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.4 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+kosogor@kosogor:~$ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable" | sudo tee /etc/apt/sources.list.d/docker.list
+deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo apt update
+Сущ:1 http://security.ubuntu.com/ubuntu noble-security InRelease
+Пол:2 https://download.docker.com/linux/ubuntu noble InRelease [48,5 kB]                             
+Сущ:3 http://us.archive.ubuntu.com/ubuntu noble InRelease                         
+Сущ:4 http://us.archive.ubuntu.com/ubuntu noble-updates InRelease           
+Пол:5 https://download.docker.com/linux/ubuntu noble/stable amd64 Packages [61,8 kB]
+Сущ:6 http://us.archive.ubuntu.com/ubuntu noble-backports InRelease               
+Сущ:7 http://us.archive.ubuntu.com/ubuntu noble-proposed InRelease
+Получено 110 kB за 1с (84,1 kB/s)         
+Чтение списков пакетов… Готово
+Построение дерева зависимостей… Готово
+Чтение информации о состоянии… Готово         
+Может быть обновлено 165 пакетов. Запустите «apt list --upgradable» для их показа.
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+Чтение списков пакетов… Готово
+Построение дерева зависимостей… Готово
+Чтение информации о состоянии… Готово         
+Будут установлены следующие дополнительные пакеты:
+  docker-ce-rootless-extras pigz
+<...>
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+kosogor@kosogor:~$
+kosogor@kosogor:~$ sudo docker run hello-world
+Unable to find image 'hello-world:latest' locally
+latest: Pulling from library/hello-world
+4f55086f7dd0: Pull complete 
+d5e71e642bf5: Download complete 
+Digest: sha256:c3cbe1cc1aa588a64951ac6286e0df7b27fe2e6324b1001c619bb358770c0178
+Status: Downloaded newer image for hello-world:latest
+
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+<...>
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ sudo usermod -aG docker $USER
+kosogor@kosogor:~$
+```
+
+2. Формируем Dockerfile для сборки nginx в Docker и выполняем сборку (данный итоговый файл для успешной сборки пакета nginx получен путём отладки и множественных повторений,
+а также на основе результатов предыдущего раздела "Сборка DEB-пакета в ВМ"):
+
+```
+kosogor@kosogor:~$ cat > Dockerfile
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y \
+    wget \
+    devscripts \
+    build-essential \
+    fakeroot \
+    dh-make \
+    quilt \
+    libpcre3-dev \
+    zlib1g-dev \
+    libssl-dev \
+    openssl \
+    dh-autoreconf \
+    debhelper \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# 1. Скачиваем и проверяем
+RUN wget -O nginx-1.24.0.tar.gz https://nginx.org/download/nginx-1.24.0.tar.gz && \
+    [ -s nginx-1.24.0.tar.gz ] || (echo "ERROR: nginx-1.24.0.tar.gz is empty!" && exit 1)
+
+# 2. Распаковываем и проверяем папку
+RUN tar xzf nginx-1.24.0.tar.gz && \
+    rm nginx-1.24.0.tar.gz && \
+    [ -d nginx-1.24.0 ] || (echo "ERROR: directory nginx-1.24.0 not found!" && exit 1)
+
+# 3. Создаём orig-архив с префиксом
+RUN tar --transform 's,^,nginx-1.24.0/,' -cf nginx_1.24.0.orig.tar.xz nginx-1.24.0
+
+# 4. Диагностика архива
+RUN ls -lh nginx_1.24.0.orig.tar.xz && \
+    file nginx_1.24.0.orig.tar.xz && \
+    tar -tf nginx_1.24.0.orig.tar.xz | head -n 10
+
+# Создаём пользователя
+RUN useradd -m -s /bin/bash kosogor
+
+# Переходим в папку исходников
+WORKDIR /build/nginx-1.24.0
+
+USER kosogor
+ENV HOME=/home/kosogor
+
+# dh_make (создаст debian/control, debian/rules и т.д.)
+RUN env USER="kosogor" LOGNAME="kosogor" dh_make -s -y -e "kosogor@example.com"
+
+# Возвращаемся на root
+USER root
+
+# --- Заменяем файлы, которые создал dh_make ---
+
+# control
+RUN cat > debian/control <<EOF
+Source: nginx
+Section: web
+Priority: optional
+Maintainer: Eugene Kosogorov <kosogor@example.com>
+Build-Depends: debhelper (>= 13), build-essential, libpcre3-dev, zlib1g-dev, libssl-dev, openssl, dh-autoreconf
+Standards-Version: 4.5.1
+
+Package: nginx
+Architecture: any
+Depends: \${shlibs:Depends}, \${misc:Depends}
+Description: nginx web server (minimal build)
+ A high performance reverse proxy and web server.
+EOF
+
+# rules
+RUN cat > debian/rules <<'EOF'
+#!/usr/bin/make -f
+%:
+	dh $@
+override_dh_auto_configure:
+	./configure --prefix=/usr \
+		--sbin-path=/usr/sbin/nginx \
+		--conf-path=/etc/nginx/nginx.conf \
+		--error-log-path=/var/log/nginx/error.log \
+		--http-log-path=/var/log/nginx/access.log \
+		--with-http_ssl_module \
+		--with-pcre
+override_dh_auto_build:
+	make
+override_dh_auto_test:
+override_dh_auto_install:
+	make install DESTDIR=$(CURDIR)/debian/tmp
+EOF
+RUN chmod +x debian/rules
+
+# compat
+RUN echo "13" > debian/compat
+
+# install
+RUN cat > debian/install <<EOF
+usr/html /usr/share/nginx
+usr/sbin/nginx usr/sbin/
+etc/nginx etc/
+EOF
+
+# ВАЖНО: создаём changelog (без него debuild не запустится)
+RUN cat > debian/changelog <<EOF
+nginx (1.24.0-1) UNRELEASED; urgency=medium
+
+  * Minimal build for NFS test environment
+  * Custom rules for configure/build/install
+
+ -- Eugene Kosogorov <kosogor@example.com>  $(date -R)
+EOF
+
+# ДИАГНОСТИКА ПЕРЕД СБОРКОЙ
+RUN pwd
+RUN ls -l debian/
+RUN head -n 5 debian/changelog
+
+# Сборка: запускаем из /build/nginx-1.24.0 (где лежит debian/)
+RUN debuild -us -uc -b
+
+# Копируем пакеты из родительской директории
+WORKDIR /build
+RUN cp ../nginx_*.deb . 2>/dev/null || true
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ docker rmi nginx-debuild-demo
+Error response from daemon: No such image: nginx-debuild-demo:latest
+kosogor@kosogor:~$ 
+kosogor@kosogor:~$ docker build --no-cache -t nginx-debuild-demo .
+[+] Building 426.7s (26/26) FINISHED                                                                                                         docker:default
+ => [internal] load build definition from Dockerfile                                                                                                   0.0s
+ => => transferring dockerfile: 3.35kB                                                                                                                 0.0s
+ => [internal] load metadata for docker.io/library/ubuntu:24.04                                                                                        1.4s
+ => [internal] load .dockerignore                                                                                                                      0.0s
+ => => transferring context: 2B                                                                                                                        0.0s
+ => CACHED [ 1/22] FROM docker.io/library/ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90                         0.0s
+ => => resolve docker.io/library/ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90                                  0.0s
+ => [ 2/22] RUN apt-get update && apt-get install -y     wget     devscripts     build-essential     fakeroot     dh-make     quilt     libpcre3-de  263.1s
+ => [ 3/22] WORKDIR /build                                                                                                                             0.3s 
+ => [ 4/22] RUN wget -O nginx-1.24.0.tar.gz https://nginx.org/download/nginx-1.24.0.tar.gz &&     [ -s nginx-1.24.0.tar.gz ] || (echo "ERROR: nginx-1  1.6s 
+ => [ 5/22] RUN tar xzf nginx-1.24.0.tar.gz &&     rm nginx-1.24.0.tar.gz &&     [ -d nginx-1.24.0 ] || (echo "ERROR: directory nginx-1.24.0 not foun  0.4s 
+ => [ 6/22] RUN tar --transform 's,^,nginx-1.24.0/,' -cf nginx_1.24.0.orig.tar.xz nginx-1.24.0                                                         0.3s 
+ => [ 7/22] RUN ls -lh nginx_1.24.0.orig.tar.xz &&     file nginx_1.24.0.orig.tar.xz &&     tar -tf nginx_1.24.0.orig.tar.xz | head -n 10              0.3s 
+ => [ 8/22] RUN useradd -m -s /bin/bash kosogor                                                                                                        0.3s 
+ => [ 9/22] WORKDIR /build/nginx-1.24.0                                                                                                                0.1s 
+ => [10/22] RUN env USER="kosogor" LOGNAME="kosogor" dh_make -s -y -e "kosogor@example.com"                                                            0.3s 
+ => [11/22] RUN cat > debian/control <<EOF                                                                                                             0.3s
+ => [12/22] RUN cat > debian/rules <<'EOF'                                                                                                             0.3s 
+ => [13/22] RUN chmod +x debian/rules                                                                                                                  0.3s 
+ => [14/22] RUN echo "13" > debian/compat                                                                                                              0.3s 
+ => [15/22] RUN cat > debian/install <<EOF                                                                                                             0.3s 
+ => [16/22] RUN cat > debian/changelog <<EOF                                                                                                           0.3s 
+ => [17/22] RUN pwd                                                                                                                                    0.3s
+ => [18/22] RUN ls -l debian/                                                                                                                          0.3s
+ => [19/22] RUN head -n 5 debian/changelog                                                                                                             0.3s
+ => [20/22] RUN debuild -us -uc -b                                                                                                                    99.4s 
+ => [21/22] WORKDIR /build                                                                                                                             0.1s 
+ => [22/22] RUN cp ../nginx_*.deb . 2>/dev/null || true                                                                                                0.2s 
+ => exporting to image                                                                                                                                56.1s 
+ => => exporting layers                                                                                                                               42.3s 
+ => => exporting manifest sha256:c13551175f5655b4780aaf2f598687eca77ccda5f102a2ace51417986e1ac1c5                                                      0.0s 
+ => => exporting config sha256:049861846ab12370b874bc78617e1dfa94ac1f91295d91f89f152202e8e91b69                                                        0.0s 
+ => => exporting attestation manifest sha256:ece04151c288a27c60b912f1e956907deaa2a2d36e2ee0390dcd0335342a6026                                          0.0s
+ => => exporting manifest list sha256:99020059456c2b3e9395b179ebb920613a6cf13b577c3477487921c27ac030e8                                                 0.0s
+ => => naming to docker.io/library/nginx-debuild-demo:latest                                                                                           0.0s
+ => => unpacking to docker.io/library/nginx-debuild-demo:latest                                                                                       13.6s
+kosogor@kosogor:~$ 
+```
+
+3. После успешной сборки DEB-пакета извлекаем готовые пакеты из контейнера:
+
+```
+kosogor@kosogor:~$ docker run -d --name nginx-build-container nginx-debuild-demo tail -f /dev/null
+13dfa161b61a95f3ee25ee970fd87e526e17f048b32b88805bfa2221ca7e1788
+kosogor@kosogor:~$
+kosogor@kosogor:~$ mkdir docker_compiled_debs
+kosogor@kosogor:~$
+kosogor@kosogor:~$ docker exec nginx-build-container ls -lh /build/
+total 8.2M
+drwxr-xr-x 1 kosogor kosogor  4.0K Jul 30 06:27 nginx-1.24.0
+-rw-r--r-- 1 root    root    1001K Jul 30 06:29 nginx-dbgsym_1.24.0-1_amd64.ddeb
+-rw-r--r-- 1 root    root      72K Jul 30 06:29 nginx_1.24.0-1_amd64.build
+-rw-r--r-- 1 root    root     6.3K Jul 30 06:29 nginx_1.24.0-1_amd64.buildinfo
+-rw-r--r-- 1 root    root     1.3K Jul 30 06:29 nginx_1.24.0-1_amd64.changes
+-rw-r--r-- 1 root    root     382K Jul 30 06:29 nginx_1.24.0-1_amd64.deb
+-rw-r--r-- 1 root    root     6.8M Jul 30 06:27 nginx_1.24.0.orig.tar.xz
+kosogor@kosogor:~$
+kosogor@kosogor:~$ docker cp nginx-build-container:/build/ ./docker_compiled_debs/
+Successfully copied 50.6MB to /home/kosogor/docker_compiled_debs/
+kosogor@kosogor:~$ ll ./docker_compiled_debs/
+total 396
+drwxrwxr-x 3 kosogor kosogor   4096 июл 30 06:42 ./
+drwxr-x--- 8 kosogor kosogor   4096 июл 30 06:36 ../
+drwxr-xr-x 3 kosogor kosogor   4096 июл 30 06:29 build/
+-rw-r--r-- 1 kosogor kosogor 390294 июл 30 06:29 nginx_1.24.0-1_amd64.deb
+kosogor@kosogor:~$ ll ./docker_compiled_debs/build/
+total 8364
+drwxr-xr-x  3 kosogor kosogor    4096 июл 30 06:29 ./
+drwxrwxr-x  3 kosogor kosogor    4096 июл 30 06:42 ../
+drwxr-xr-x 10 kosogor kosogor    4096 июл 30 06:27 nginx-1.24.0/
+-rw-r--r--  1 kosogor kosogor   72785 июл 30 06:29 nginx_1.24.0-1_amd64.build
+-rw-r--r--  1 kosogor kosogor    6442 июл 30 06:29 nginx_1.24.0-1_amd64.buildinfo
+-rw-r--r--  1 kosogor kosogor    1328 июл 30 06:29 nginx_1.24.0-1_amd64.changes
+-rw-r--r--  1 kosogor kosogor  390294 июл 30 06:29 nginx_1.24.0-1_amd64.deb
+-rw-r--r--  1 kosogor kosogor 7045120 июл 30 06:27 nginx_1.24.0.orig.tar.xz
+-rw-r--r--  1 kosogor kosogor 1024840 июл 30 06:29 nginx-dbgsym_1.24.0-1_amd64.ddeb
+kosogor@kosogor:~$
+kosogor@kosogor:~$ ll -h ./docker_compiled_debs/build/
+total 8,2M
+drwxr-xr-x  3 kosogor kosogor  4,0K июл 30 06:29 ./
+drwxrwxr-x  3 kosogor kosogor  4,0K июл 30 06:42 ../
+drwxr-xr-x 10 kosogor kosogor  4,0K июл 30 06:27 nginx-1.24.0/
+-rw-r--r--  1 kosogor kosogor   72K июл 30 06:29 nginx_1.24.0-1_amd64.build
+-rw-r--r--  1 kosogor kosogor  6,3K июл 30 06:29 nginx_1.24.0-1_amd64.buildinfo
+-rw-r--r--  1 kosogor kosogor  1,3K июл 30 06:29 nginx_1.24.0-1_amd64.changes
+-rw-r--r--  1 kosogor kosogor  382K июл 30 06:29 nginx_1.24.0-1_amd64.deb
+-rw-r--r--  1 kosogor kosogor  6,8M июл 30 06:27 nginx_1.24.0.orig.tar.xz
+-rw-r--r--  1 kosogor kosogor 1001K июл 30 06:29 nginx-dbgsym_1.24.0-1_amd64.ddeb
+kosogor@kosogor:~$
+```
+
+## Примечание: 
+для облегчения разработки Dockerfile ИИ рекомендовано разделить его на два но это не проверялось.
+В этом случае Dockerfile получается максимально простой и читается как «подготовил среду → запустил скрипт».
+
+Dockerfile
+```
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y \
+    wget \
+    devscripts \
+    build-essential \
+    fakeroot \
+    dh-make \
+    quilt \
+    libpcre3-dev \
+    zlib1g-dev \
+    libssl-dev \
+    openssl \
+    dh-autoreconf \
+    debhelper \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY build.sh /build/build.sh
+RUN chmod +x /build/build.sh
+
+# Вся сборка — одной командой
+RUN /build/build.sh
+```
+
+А ниже приведён готовый build.sh, который выносит всю «ручную» логику из Dockerfile. Внутри него — ровно те команды, которые ты делал бы в терминале на чистой ВМ, плюс диагностика.
+
+build.sh
+```
+#!/usr/bin/env bash
+set -euo pipefail
+
+WORKDIR="/build"
+SRC_DIR="nginx-1.24.0"
+ORIG_ARCHIVE="nginx_1.24.0.orig.tar.xz"
+DEB_PKG="nginx_1.24.0-1_amd64.deb"
+DBGSYM_PKG="nginx-dbgsym_1.24.0-1_amd64.ddeb"
+
+cd "$WORKDIR"
+
+echo "=== 1. Скачивание исходников ==="
+wget -O "${SRC_DIR}.tar.gz" "https://nginx.org/download/${SRC_DIR}.tar.gz"
+[ -s "${SRC_DIR}.tar.gz" ] || { echo "ERROR: архив пуст"; exit 1; }
+
+echo "=== 2. Распаковка и проверка ==="
+tar xzf "${SRC_DIR}.tar.gz"
+rm "${SRC_DIR}.tar.gz"
+[ -d "$SRC_DIR" ] || { echo "ERROR: папка $SRC_DIR не найдена"; exit 1; }
+
+echo "=== 3. Создание orig-архива ==="
+tar --transform 's,^,nginx-1.24.0/,' -cf "$ORIG_ARCHIVE" "$SRC_DIR"
+
+# Диагностика архива
+ls -lh "$ORIG_ARCHIVE"
+file "$ORIG_ARCHIVE"
+tar -tf "$ORIG_ARCHIVE" | head -n 10
+
+echo "=== 4. Создание пользователя для debuild ==="
+# debuild не любит root, поэтому нужен обычный пользователь
+if ! id -u kosogor >/dev/null 2>&1; then
+    useradd -m -s /bin/bash kosogor
+fi
+
+echo "=== 5. Запуск dh_make от имени kosogor ==="
+export USER="kosogor"
+export LOGNAME="kosogor"
+HOME="/home/kosogor"
+
+cd "$WORKDIR/$SRC_DIR"
+su - kosogor -c "dh_make -s -y -e kosogor@example.com"
+
+echo "=== 6. Перезапись файлов debian/ ==="
+cd "$WORKDIR/$SRC_DIR"
+
+cat > debian/control <<EOF
+Source: nginx
+Section: web
+Priority: optional
+Maintainer: Eugene Kosogorov <kosogor@example.com>
+Build-Depends: debhelper (>= 13), build-essential, libpcre3-dev, zlib1g-dev, libssl-dev, openssl, dh-autoreconf
+Standards-Version: 4.5.1
+
+Package: nginx
+Architecture: any
+Depends: \${shlibs:Depends}, \${misc:Depends}
+Description: nginx web server (minimal build)
+ A high performance reverse proxy and web server.
+EOF
+
+cat > debian/rules <<'EOF'
+#!/usr/bin/make -f
+%:
+	dh $@
+override_dh_auto_configure:
+	./configure --prefix=/usr \
+		--sbin-path=/usr/sbin/nginx \
+		--conf-path=/etc/nginx/nginx.conf \
+		--error-log-path=/var/log/nginx/error.log \
+		--http-log-path=/var/log/nginx/access.log \
+		--with-http_ssl_module \
+		--with-pcre
+override_dh_auto_build:
+	make
+override_dh_auto_test:
+override_dh_auto_install:
+	make install DESTDIR=$(CURDIR)/debian/tmp
+EOF
+chmod +x debian/rules
+
+echo "13" > debian/compat
+
+cat > debian/install <<EOF
+usr/html /usr/share/nginx
+usr/sbin/nginx usr/sbin/
+etc/nginx etc/
+EOF
+
+# changelog обязателен для debuild
+cat > debian/changelog <<EOF
+nginx (1.24.0-1) UNRELEASED; urgency=medium
+
+  * Minimal build for NFS test environment
+  * Custom rules for configure/build/install
+
+ -- Eugene Kosogorov <kosogor@example.com>  $(date -R)
+EOF
+
+echo "=== 7. Диагностика перед сборкой ==="
+pwd
+ls -l debian/
+head -n 5 debian/changelog
+
+echo "=== 8. Сборка пакета ==="
+# Запускаем debuild из папки с debian/ (то есть из /build/nginx-1.24.0)
+cd "$WORKDIR/$SRC_DIR"
+debuild -us -uc -b
+
+echo "=== 9. Копирование результатов в WORKDIR ==="
+cd "$WORKDIR"
+cp "../$SRC_DIR/$DEB_PKG" . 2>/dev/null || true
+cp "../$SRC_DIR/$DBGSYM_PKG" . 2>/dev/null || true
+
+echo "=== Готово ==="
+ls -lh *.deb *.ddeb 2>/dev/null || echo "Пакеты не найдены"
+```
