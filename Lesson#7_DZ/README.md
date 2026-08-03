@@ -133,7 +133,7 @@ Connection to 192.168.122.176 closed.
 [admin_insta11@mv334 ~]$ 
 ```
 
-2. После перезагрузки ВМ перед загрузкой ОС появляется меню GRUB:
+2. После перезагрузки ВМ перед загрузкой ОС появляется меню GRUB в течение 10 секунд:
 
 <img width="1035" height="947" alt="изображение" src="https://github.com/user-attachments/assets/d9d35149-3095-4091-a2d2-a03b75a6d2ab" />
 
@@ -156,10 +156,35 @@ Connection to 192.168.122.176 closed.
 
 <img width="1031" height="769" alt="изображение" src="https://github.com/user-attachments/assets/63e228cd-5413-4854-be2d-287928d64225" />
 
-Далее появляется меню выбора опций восстановления - выбираем 'root' (с наложившимися артефактами строк загрузки, но рабочее)? 
+Далее появляется меню выбора опций восстановления - выбираем 'root' (с наложившимися артефактами строк загрузки, но рабочее), 
 в нём выбираем пункт 'root' :
 
 <img width="1033" height="744" alt="изображение" src="https://github.com/user-attachments/assets/1be78619-7a72-4a6d-b580-3c6ef23b7091" />
+
+И оказываемся в системе с подмонтированной Read-Write основной системой:
+
+<img width="1033" height="797" alt="изображение" src="https://github.com/user-attachments/assets/6b4d28c1-bb89-447c-82f9-457af838c257" />
+
+4. Прямо находясь в этом режиме переименовываем Virtual group в LVM (ubuntu-vg -> ubuntu-otus) :
+
+<img width="1033" height="935" alt="изображение" src="https://github.com/user-attachments/assets/7eb99e59-712b-4b3a-8752-853f2b7350a2" />
+
+Далее сразу исправляем в файле /boot/grub/grub.cfg все названия VG ubuntu-vg на ubuntu-otus (встречается в трёх местах в файле, при этом
+в файле дефис меняется на два дефиса ubuntu--vg ubuntu--otus) :
+
+<img width="1035" height="807" alt="изображение" src="https://github.com/user-attachments/assets/8dd3ec9f-1ccd-4dbf-9938-a903f4e2fe96" />
+
+=>
+
+<img width="1033" height="749" alt="изображение" src="https://github.com/user-attachments/assets/694f8a1e-f2aa-4cd5-ad3c-c18eae5263f6" />
+
+После этого перезагружаем ОС:
+
+5. После перезагрузки ОС успешно загружается уже в основном режиме, при этом LVM VG в системе уже с новым названием:
+
+<img width="1035" height="941" alt="изображение" src="https://github.com/user-attachments/assets/f1f5d944-9fc1-4d6c-a899-2ad049687090" />
+
+
 
 
 
