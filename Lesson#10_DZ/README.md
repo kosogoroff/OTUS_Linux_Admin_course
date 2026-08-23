@@ -214,3 +214,40 @@ mv334       eugeny.kosogorov@yandex.ru
 
 <img width="1211" height="481" alt="изображение" src="https://github.com/user-attachments/assets/5a638296-718b-42af-a5f9-e3d509564294" />
 
+
+### 3. Скрипты для парсинга лога
+
+Для от
+
+
+### 4. Отправка писем полученных отчётов в почту Яндекс
+
+Наконец, отправляем получаемые скриптами отчёты по логу в почту Яндекс:
+
+```
+[root@mv334 admin_insta11]# cur_date=`date -d "2019-08-14 19:00:00" +'%Y-%m-%d %H:00:00'`; prev_date=`date -d "$cur_date 1 hour ago" +'%Y-%m-%d %H:%M:%S'`; /home/admin_insta11/scan_log2.sh -t "$cur_date" | mail -s "Результаты проверки лога за период $prev_date - $cur_date" eugeny.kosogorov@yandex.ru
+[root@mv334 admin_insta11]# 
+[root@mv334 admin_insta11]# cur_date=`date -d "2019-08-14 20:00:00" +'%Y-%m-%d %H:00:00'`; prev_date=`date -d "$cur_date 1 hour ago" +'%Y-%m-%d %H:%M:%S'`; /home/admin_insta11/scan_log2.sh -t "$cur_date" | mail -s "Результаты проверки лога за период $prev_date - $cur_date" eugeny.kosogorov@yandex.ru
+[root@mv334 admin_insta11]# 
+[root@mv334 admin_insta11]# cur_date=`date -d "2019-08-14 21:00:00" +'%Y-%m-%d %H:00:00'`; prev_date=`date -d "$cur_date 1 hour ago" +'%Y-%m-%d %H:%M:%S'`; /home/admin_insta11/scan_log2.sh -t "$cur_date" | mail -s "Результаты проверки лога за период $prev_date - $cur_date" eugeny.kosogorov@yandex.ru
+[root@mv334 admin_insta11]# 
+[root@mv334 admin_insta11]# cur_date=`date -d "2019-08-14 22:00:00" +'%Y-%m-%d %H:00:00'`; prev_date=`date -d "$cur_date 1 hour ago" +'%Y-%m-%d %H:%M:%S'`; /home/admin_insta11/scan_log2.sh -t "$cur_date" | mail -s "Результаты проверки лога за период $prev_date - $cur_date" eugeny.kosogorov@yandex.ru
+[root@mv334 admin_insta11]# 
+[root@mv334 admin_insta11]# cur_date=`date -d "2019-08-14 23:00:00" +'%Y-%m-%d %H:00:00'`; prev_date=`date -d "$cur_date 1 hour ago" +'%Y-%m-%d %H:%M:%S'`; /home/admin_insta11/scan_log2.sh -t "$cur_date" | mail -s "Результаты проверки лога за период $prev_date - $cur_date" eugeny.kosogorov@yandex.ru
+[root@mv334 admin_insta11]# 
+```
+
+При этом в почтовый ящик Яндекс приходят письма с отчётами:
+
+<img width="1130" height="655" alt="изображение" src="https://github.com/user-attachments/assets/2a3dd74b-83e3-43a7-ad58-bcff60291ef2" />
+
+Письма имеют следующее соодержимое:
+
+<img width="1654" height="973" alt="изображение" src="https://github.com/user-attachments/assets/dedffe30-45da-4914-89e8-74f887ea875a" />
+
+
+<img width="1159" height="657" alt="изображение" src="https://github.com/user-attachments/assets/82e632a3-9908-45c9-9e3f-dc831dfbb84b" />
+
+
+<img width="1161" height="659" alt="изображение" src="https://github.com/user-attachments/assets/4e9f9b1e-8513-412c-b9ea-21ec52f25aa6" />
+
