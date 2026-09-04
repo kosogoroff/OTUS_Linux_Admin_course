@@ -812,3 +812,339 @@ logout
 
 
 ## 2. Также проверяем вариант установки и работы Vagrant + Virtualbox
+
+2.1 Устанавливаем Virtualbox, на всякий случай перегружаем хост, после перезагрузки проверяем работу драйвера virtualbox:
+
+```
+[admin_insta11@mv334 ~]$ sudo dnf install VirtualBox VirtualBox-guest-additions VirtualBox-kmod_$(uname -r)
+[sudo] пароль для admin_insta11: 
+Последняя проверка окончания срока действия метаданных: 0:21:31 назад, Пт 04 сен 2026 18:58:19.
+Зависимости разрешены.
+=================================================================================================================================================
+ Пакет                                                  Архитектура            Версия                             Репозиторий              Размер
+=================================================================================================================================================
+Установка:
+ VirtualBox                                             x86_64                 7.1.16-1.el7                       updates                   26 M
+ VirtualBox-kmod_6.1.175-1.el7.3.x86_64                 x86_64                 7.1.16-7.el7                       kernels6                 331 k
+ kernel-lt                                              x86_64                 6.1.180-1.el7.3                    kernels6                  80 M
+ virtualbox-guest-additions                             x86_64                 7.1.16-1.el7                       updates                  721 k
+Установка зависимостей:
+ VirtualBox-kmod                                        x86_64                 7.1.16-9.el7                       kernels6                 7.7 k
+ VirtualBox-kmod_6.1.180-1.el7.3.x86_64                 x86_64                 7.1.16-9.el7                       kernels6                 330 k
+ VirtualBox-server                                      x86_64                 7.1.16-1.el7                       updates                   22 M
+ qt6-qtscxml                                            x86_64                 6.6.3-1.el7                        updates                  539 k
+ qt6-qttools-common                                     noarch                 6.6.3-1.el7                        updates                  9.6 k
+ qt6-qttools-libs-help                                  x86_64                 6.6.3-1.el7                        updates                  191 k
+
+Результат транзакции
+=================================================================================================================================================
+Установка  10 Пакетов
+
+Объем загрузки: 130 M
+Объем изменений: 511 M
+Продолжить? [д/Н]: y
+Загрузка пакетов:
+(1/10): qt6-qtscxml-6.6.3-1.el7.x86_64.rpm                                                                       465 kB/s | 539 kB     00:01    
+(2/10): qt6-qttools-common-6.6.3-1.el7.noarch.rpm                                                                 34 kB/s | 9.6 kB     00:00    
+(3/10): qt6-qttools-libs-help-6.6.3-1.el7.x86_64.rpm                                                             238 kB/s | 191 kB     00:00    
+(4/10): virtualbox-guest-additions-7.1.16-1.el7.x86_64.rpm                                                       283 kB/s | 721 kB     00:02    
+(5/10): VirtualBox-kmod-7.1.16-9.el7.x86_64.rpm                                                                   45 kB/s | 7.7 kB     00:00    
+(6/10): VirtualBox-kmod_6.1.175-1.el7.3.x86_64-7.1.16-7.el7.x86_64.rpm                                           388 kB/s | 331 kB     00:00    
+(7/10): VirtualBox-kmod_6.1.180-1.el7.3.x86_64-7.1.16-9.el7.x86_64.rpm                                           695 kB/s | 330 kB     00:00    
+(8/10): VirtualBox-server-7.1.16-1.el7.x86_64.rpm                                                                913 kB/s |  22 MB     00:24    
+(9/10): VirtualBox-7.1.16-1.el7.x86_64.rpm                                                                       746 kB/s |  26 MB     00:35    
+(10/10): kernel-lt-6.1.180-1.el7.3.x86_64.rpm                                                                    2.1 MB/s |  80 MB     00:37    
+-------------------------------------------------------------------------------------------------------------------------------------------------
+Общий размер                                                                                                     2.9 MB/s | 130 MB     00:44     
+Проверка транзакции
+Проверка транзакции успешно завершена.
+Идет проверка транзакции
+Тест транзакции проведен успешно.
+Выполнение транзакции
+  Подготовка       :                                                                                                                         1/1 
+  Запуск скриптлета: kernel-lt-6.1.180-1.el7.3.x86_64                                                                                       1/10 
+  Установка        : kernel-lt-6.1.180-1.el7.3.x86_64                                                                                       1/10 
+  Установка        : VirtualBox-kmod_6.1.180-1.el7.3.x86_64-7.1.16-9.el7.x86_64                                                             2/10 
+  Установка        : VirtualBox-kmod-7.1.16-9.el7.x86_64                                                                                    3/10 
+  Установка        : VirtualBox-server-7.1.16-1.el7.x86_64                                                                                  4/10 
+  Запуск скриптлета: VirtualBox-server-7.1.16-1.el7.x86_64                                                                                  4/10 
+Created symlink /etc/systemd/system/multi-user.target.wants/vboxdrv.service → /usr/lib/systemd/system/vboxdrv.service.
+
+  Установка        : qt6-qttools-common-6.6.3-1.el7.noarch                                                                                  5/10 
+  Установка        : qt6-qttools-libs-help-6.6.3-1.el7.x86_64                                                                               6/10 
+  Установка        : qt6-qtscxml-6.6.3-1.el7.x86_64                                                                                         7/10 
+  Установка        : VirtualBox-7.1.16-1.el7.x86_64                                                                                         8/10 
+  Установка        : virtualbox-guest-additions-7.1.16-1.el7.x86_64                                                                         9/10 
+  Запуск скриптлета: virtualbox-guest-additions-7.1.16-1.el7.x86_64                                                                         9/10 
+  Установка        : VirtualBox-kmod_6.1.175-1.el7.3.x86_64-7.1.16-7.el7.x86_64                                                            10/10 
+  Запуск скриптлета: kernel-lt-6.1.180-1.el7.3.x86_64                                                                                      10/10 
+  Запуск скриптлета: VirtualBox-kmod_6.1.180-1.el7.3.x86_64-7.1.16-9.el7.x86_64                                                            10/10 
+  Запуск скриптлета: VirtualBox-kmod_6.1.175-1.el7.3.x86_64-7.1.16-7.el7.x86_64                                                            10/10 
+Creating group vboxsf with gid 969.
+Creating group vboxusers with gid 968.
+Creating user vboxadd (n/a) with uid 967 and gid 1.
+
+  Проверка         : VirtualBox-7.1.16-1.el7.x86_64                                                                                         1/10 
+  Проверка         : VirtualBox-server-7.1.16-1.el7.x86_64                                                                                  2/10 
+  Проверка         : qt6-qtscxml-6.6.3-1.el7.x86_64                                                                                         3/10 
+  Проверка         : qt6-qttools-common-6.6.3-1.el7.noarch                                                                                  4/10 
+  Проверка         : qt6-qttools-libs-help-6.6.3-1.el7.x86_64                                                                               5/10 
+  Проверка         : virtualbox-guest-additions-7.1.16-1.el7.x86_64                                                                         6/10 
+  Проверка         : VirtualBox-kmod-7.1.16-9.el7.x86_64                                                                                    7/10 
+  Проверка         : VirtualBox-kmod_6.1.175-1.el7.3.x86_64-7.1.16-7.el7.x86_64                                                             8/10 
+  Проверка         : VirtualBox-kmod_6.1.180-1.el7.3.x86_64-7.1.16-9.el7.x86_64                                                             9/10 
+  Проверка         : kernel-lt-6.1.180-1.el7.3.x86_64                                                                                      10/10 
+
+Установлен:
+  VirtualBox-7.1.16-1.el7.x86_64                                          VirtualBox-kmod-7.1.16-9.el7.x86_64                                    
+  VirtualBox-kmod_6.1.175-1.el7.3.x86_64-7.1.16-7.el7.x86_64              VirtualBox-kmod_6.1.180-1.el7.3.x86_64-7.1.16-9.el7.x86_64             
+  VirtualBox-server-7.1.16-1.el7.x86_64                                   kernel-lt-6.1.180-1.el7.3.x86_64                                       
+  qt6-qtscxml-6.6.3-1.el7.x86_64                                          qt6-qttools-common-6.6.3-1.el7.noarch                                  
+  qt6-qttools-libs-help-6.6.3-1.el7.x86_64                                virtualbox-guest-additions-7.1.16-1.el7.x86_64                         
+
+Выполнено!
+[admin_insta11@mv334 ~]$
+[admin_insta11@mv334 ~]$ sudo reboot
+
+<... ПЕРЕЗАГРУЗКА ...>
+
+[admin_insta11@mv334 ~]$ systemctl status vboxdrv
+● vboxdrv.service - Linux kernel module init script
+     Loaded: loaded (/usr/lib/systemd/system/vboxdrv.service; enabled; vendor preset: enabled)
+     Active: active (exited) since Fri 2026-09-04 19:23:37 MSK; 3min 38s ago
+    Process: 705 ExecStart=/sbin/modprobe vboxdrv (code=exited, status=0/SUCCESS)
+    Process: 745 ExecStart=/sbin/modprobe vboxnetflt (code=exited, status=0/SUCCESS)
+    Process: 750 ExecStart=/sbin/modprobe vboxnetadp (code=exited, status=0/SUCCESS)
+   Main PID: 750 (code=exited, status=0/SUCCESS)
+        CPU: 27ms
+
+сен 04 19:23:37 mv334 systemd[1]: Starting Linux kernel module init script...
+сен 04 19:23:37 mv334 systemd[1]: Finished Linux kernel module init script.
+[admin_insta11@mv334 ~]$
+```
+
+2.2 Добавляем Бокс ВМ в реестр vagrant:
+
+```
+[admin_insta11@mv334 ~]$ ll /distrib/vagrant_boxes/
+итого 8408428
+-rwxrwxrwx 1 admin_insta11 admin_insta11  546709438 авг 31 21:50  almalinux-9-9.8.20260810-amd64-libvirt.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11  698021674 авг 31 22:18  almalinux-9-9.8.20260810-amd64-virtualbox.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11  838235264 сен  1 06:22  bento-ubuntu-22.04-202510.26.0-amd64-virtualbox.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11 3216132560 авг 31 23:48  bento-ubuntu-26.04-202606.01.0-amd64-libvirt.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11 3311076684 сен  1 06:00  bento-ubuntu-26.04-202606.01.0-amd64-virtualbox.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11       2020 сен  1 18:12 'Vagrant boxes.txt'
+[admin_insta11@mv334 ~]$ export BOX_FILE="almalinux-9-9.8.20260810-amd64-virtualbox.box"
+[admin_insta11@mv334 ~]$ export BOX_FILE="/distrib/vagrant_boxes/almalinux-9-9.8.20260810-amd64-virtualbox.box"
+[admin_insta11@mv334 ~]$ vagrant box add --name "$BOX_NAME" "$BOX_FILE"
+==> box: Box file was not detected as metadata. Adding it directly...
+==> box: Adding box 'almalinux9-stand-vb' (v0) for provider: 
+    box: Unpacking necessary files from: file:///distrib/vagrant_boxes/almalinux-9-9.8.20260810-amd64-virtualbox.box
+==> box: Successfully added box 'almalinux9-stand-vb' (v0) for ''!
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ vagrant box list
+almalinux9-stand    (libvirt, 0)
+almalinux9-stand-vb (virtualbox, 0)
+[admin_insta11@mv334 ~]$
+```
+
+2.3 Создаём проект и Vagrantfile для новой ВМ. При этом делаем в исходном Vagrantfile для virtualbox изменения для использования локально установленного бокса ВМ (вместо скачивания его из облака):
+- строку ':box_name => "almalinux/9"' заменяем на строку ':box_name => "almalinux9-stand-vb"' с именем локально установленного бокса из команды 'vagrant box add';
+- убираем точную версию и ссылку на неё, так как локально установленная точная версия немного отличается.
+
+Исправленный Vagrantfile для virtualbox приведён ниже:
+```
+[admin_insta11@mv334 ~]$ mkdir -p ~/lab-almalinux9-virtualbox && cd ~/lab-almalinux9-virtualbox
+[admin_insta11@mv334 ~]$
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$ cat > Vagrantfile
+MACHINES = {
+  :"selinux" => {
+#              :box_name => "almalinux/9",       # <-- меняем на имя локально установленного бокса из vagrant box add
+#              :box_version => "9.4.20240805",   # <-- убираем точную версию, так как локальная отличается
+              :box_name => "almalinux9-stand-vb",
+              :cpus => 2,
+              :memory => 2048
+            }
+}
+
+Vagrant.configure("2") do |config|
+  MACHINES.each do |boxname, boxconfig|
+    config.vm.synced_folder ".", "/vagrant", disabled: true
+    config.vm.define boxname do |box|
+      box.vm.box = boxconfig[:box_name]
+#      box.vm.box_version = boxconfig[:box_version]   # <--  убираем ссылку на точную версию в хэше MACHINES
+      box.vm.host_name = boxname.to_s
+      box.vm.network "forwarded_port", guest: 4881, host: 4881
+      box.vm.provider "virtualbox" do |v|
+        v.memory = boxconfig[:memory]
+        v.cpus = boxconfig[:cpus]
+      end
+      box.vm.provision "shell", inline: <<-SHELL
+      yum install -y epel-release
+      yum install -y nginx
+      yum install -y setroubleshoot-server selinux-policy-mls setools-console policycoreutils-python-utils policycoreutils-newrole
+      sed -ie 's/:80/:4881/g' /etc/nginx/nginx.conf
+      sed -i 's/listen       80;/listen       4881;/' /etc/nginx/nginx.conf
+      systemctl start nginx
+      systemctl status nginx
+      ss -tlpn | grep 4881
+SHELL
+    end
+  end
+end
+
+```
+
+2.4 Создаём и запускаем ВМ для virtualbox. Для запуска virtualbox необходимо выгрузить драйверы ядра для libvirt/kvm - два гипервизора
+не могут быть одновременно запущены на одном хосте, при запуске ВМ для virtualbox выдаётся ошибка:
+
+```
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$ vagrant up
+Bringing machine 'selinux' up with 'virtualbox' provider...
+==> selinux: Importing base box 'almalinux9-stand-vb'...
+==> selinux: Matching MAC address for NAT networking...
+==> selinux: Setting the name of the VM: lab-almalinux9-virtualbox_selinux_1788544356267_45854
+==> selinux: Clearing any previously set network interfaces...
+==> selinux: Preparing network interfaces based on configuration...
+    selinux: Adapter 1: nat
+==> selinux: Forwarding ports...
+    selinux: 4881 (guest) => 4881 (host) (adapter 1)
+    selinux: 22 (guest) => 2222 (host) (adapter 1)
+==> selinux: Running 'pre-boot' VM customizations...
+==> selinux: Booting VM...
+There was an error while executing `VBoxManage`, a CLI used by Vagrant
+for controlling VirtualBox. The command and stderr is shown below.
+
+Command: ["startvm", "4141b4ad-07d8-4f90-8be7-d215c6d2db39", "--type", "headless"]
+
+Stderr: VBoxManage: error: VT-x is being used by another hypervisor (VERR_VMX_IN_VMX_ROOT_MODE).
+VBoxManage: error: VirtualBox can't operate in VMX root mode. Please disable the KVM kernel extension, recompile your kernel and reboot (VERR_VMX_IN_VMX_ROOT_MODE)
+VBoxManage: error: Details: code NS_ERROR_FAILURE (0x80004005), component ConsoleWrap, interface IConsole
+
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$
+```
+
+Поэтому перед запуском ВМ для virtualbox сначала ВРЕМЕННО останавливаем виртуальные машины, запущенные в KVM, сам гипервизор KVM и его драйвера ядра:
+
+```
+[admin_insta11@mv334 lab-almalinux9-kvm]$ vagrant halt
+==> selinux: Attempting graceful shutdown of VM...
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ sudo virsh list
+[sudo] пароль для admin_insta11: 
+ ID   Имя   Состояние
+-----------------------
+
+[admin_insta11@mv334 lab-almalinux9-kvm]$ sudo systemctl stop libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket libvirtd.service
+[admin_insta11@mv334 lab-almalinux9-kvm]$
+[admin_insta11@mv334 lab-almalinux9-kvm]$ lsmod | grep kvm
+kvm_intel             389120  0
+kvm                  1118208  1 kvm_intel
+irqbypass              16384  1 kvm
+[admin_insta11@mv334 lab-almalinux9-kvm]$
+[admin_insta11@mv334 lab-almalinux9-kvm]$ sudo modprobe -r kvm_intel
+[admin_insta11@mv334 lab-almalinux9-kvm]$
+[admin_insta11@mv334 lab-almalinux9-kvm]$ lsmod | grep kvm
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+```
+
+А затем запускаем ВМ для virtualbox:
+
+```
+[admin_insta11@mv334 lab-almalinux9-kvm]$ cd ..
+[admin_insta11@mv334 ~]$ cd lab-almalinux9-virtualbox/
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$ vagrant up
+Bringing machine 'selinux' up with 'virtualbox' provider...
+==> selinux: Clearing any previously set forwarded ports...
+==> selinux: Clearing any previously set network interfaces...
+==> selinux: Preparing network interfaces based on configuration...
+    selinux: Adapter 1: nat
+==> selinux: Forwarding ports...
+    selinux: 4881 (guest) => 4881 (host) (adapter 1)
+    selinux: 22 (guest) => 2222 (host) (adapter 1)
+==> selinux: Running 'pre-boot' VM customizations...
+==> selinux: Booting VM...
+==> selinux: Waiting for machine to boot. This may take a few minutes...
+    selinux: SSH address: 127.0.0.1:2222
+    selinux: SSH username: vagrant
+    selinux: SSH auth method: private key
+==> selinux: Machine booted and ready!
+==> selinux: Checking for guest additions in VM...
+    selinux: The guest additions on this VM do not match the installed version of
+    selinux: VirtualBox! In most cases this is fine, but in rare cases it can
+    selinux: prevent things such as shared folders from working properly. If you see
+    selinux: shared folder errors, please make sure the guest additions within the
+    selinux: virtual machine match the version of VirtualBox you have installed on
+    selinux: your host and reload your VM.
+    selinux: 
+    selinux: Guest Additions Version: 7.2.16
+    selinux: VirtualBox Version: 7.1
+==> selinux: Setting hostname...
+==> selinux: Machine already provisioned. Run `vagrant provision` or use the `--provision`
+==> selinux: flag to force provisioning. Provisioners marked to run always will still run.
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$ 
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$ vagrant ssh
+Last login: Fri Sep  4 18:08:48 2026 from 10.0.2.2
+[vagrant@selinux ~]$
+```
+
+При этом в менеджере VirtualBox видна созданная и запущенная виртуальная машина:
+
+<img width="967" height="574" alt="изображение" src="https://github.com/user-attachments/assets/79e8d67e-e201-4f5a-a56c-3103ede6a21f" />
+
+
+2.5 После эксперимента с запуском ВМ для virtualbox для переключения обратно на libvrt/kvm останавливаем все ВМ для virtualbox (драйвер
+virtualbox выгружать не нужно), загружаем драйвера ядра для libvrt/kvm, запускаем сервис libvirt, и после этого запускаем ВМ в KVM:
+
+```
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$ vagrant ssh
+Last login: Fri Sep  4 18:08:48 2026 from 10.0.2.2
+[vagrant@selinux ~]$ exit
+logout
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$ vagrant halt
+==> selinux: Attempting graceful shutdown of VM...
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$ 
+[admin_insta11@mv334 lab-almalinux9-virtualbox]$ cd ..
+[admin_insta11@mv334 ~]$ cd lab-almalinux9-kvm
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ sudo modprobe kvm_intel
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ lsmod | grep kvm
+kvm_intel             389120  0
+kvm                  1118208  1 kvm_intel
+irqbypass              16384  1 kvm
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ sudo systemctl start libvirtd
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ vagrant up
+Bringing machine 'selinux' up with 'libvirt' provider...
+==> selinux: Creating shared folders metadata...
+==> selinux: Starting domain.
+==> selinux: Domain launching with graphics connection settings...
+==> selinux:  -- Graphics Port:      5900
+==> selinux:  -- Graphics IP:        127.0.0.1
+==> selinux:  -- Graphics Password:  Not defined
+==> selinux:  -- Graphics Websocket: 5700
+==> selinux: Waiting for domain to get an IP address...
+==> selinux: Waiting for machine to boot. This may take a few minutes...
+    selinux: SSH address: 192.168.121.206:22
+    selinux: SSH username: vagrant
+    selinux: SSH auth method: private key
+    selinux: Warning: Host unreachable. Retrying...
+    selinux: Warning: Connection refused. Retrying...
+==> selinux: Machine booted and ready!
+==> selinux: Machine already provisioned. Run `vagrant provision` or use the `--provision`
+==> selinux: flag to force provisioning. Provisioners marked to run always will still run.
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ vagrant ssh
+Last login: Fri Sep  4 19:39:34 2026 from 192.168.121.1
+[vagrant@selinux ~]$ 
+[vagrant@selinux ~]$ exit
+logout
+[admin_insta11@mv334 lab-almalinux9-kvm]$ vagrant halt
+==> selinux: Attempting graceful shutdown of VM...
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+```
+
