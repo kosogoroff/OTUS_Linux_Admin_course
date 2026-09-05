@@ -1148,3 +1148,204 @@ logout
 [admin_insta11@mv334 lab-almalinux9-kvm]$ 
 ```
 
+## 3. Организация сети и сетевой связности для при использовании libvirt/kvm и virtuallbox
+
+Понимание организация сети и сетевой связности между виртуальными машинами и хостовой машиной важно для понимания и дальнейшего обучения - пришлось разобраться с использованием интернета и ИИ.
+
+KVM/libvirt строит сеть из стандартных компонентов Linux (мосты, TAP, dnsmasq) — всё видно и настраивается. VirtualBox прячет всё внутрь своих модулей ядра — снаружи видно только проброшенные порты и (иногда) vboxnet0.
+
+Ключевые отличия (кратко)
+
+| Команда на хосте	| KVM/libvirt	| VirtualBox |
+|:---------------------|:---------------------------|:-------------------------------------|
+| bridge link show	   | виден vnet0 на virbr0 |	пусто |
+| ip -br addr	       | виден virbr0, vnet0	| только vboxnet0 (в режиме host-only) |
+| ss -tlpn  grep 4881  | пусто (nginx внутри ВМ)	| процесс VirtualBox на 127.0.0.1:4881 |
+| ps aux  grep dnsmasq |	виден dnsmasq от libvirt	| пусто (DHCP внутри VB) |
+
+Различия в построении сетей libvirt/kvm и virtualbox много:
+
+- В libvirt хост спокойно ходит по IP на ВМ — потому что там обычный Linux‑мост (virbr0) и TAP‑интерфейсы, всё прозрачно видно через ip addr и bridge link. Используются интерфейсы: virbr0 на хосте, vnet0 (или vnet1) как порт этого моста, и в ВМ — интерфейс с IP из той же подсети. Это и есть «физическая» связь в KVM: TAP‑устройство в ядре + мост.
+
+- В VirtualBox хост не видит IP гостевой машины и приходится делать проброс портов — потому что там сеть «спрятана» внутри движка VB.
+  
+
+### 3.1 Организация сети и сетевой связности для при использовании libvirt/kvm
+
+При запущенной Vagrant сконфигурированной ВМ с использованием  libvirt/kvm видны следующие сетевые интерфейсы и конфигурации:
+
+- в гостевой ВМ интерфейсы и конфигурации видны следующие:
+
+```
+[admin_insta11@mv334 lab-almalinux9-kvm]$ vagrant ssh
+Last login: Sat Sep  5 17:04:16 2026 from 192.168.121.1
+[vagrant@selinux ~]$ ip -br addr show
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eth0             UP             192.168.121.226/24 fe80::d4b4:6edc:311:9c69/64 
+eth1             UP             192.168.56.10/24 fe80::5054:ff:fe92:1147/64 
+[vagrant@selinux ~]$ ip -br link show
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+eth0             UP             52:54:00:59:2e:0c <BROADCAST,MULTICAST,UP,LOWER_UP> 
+eth1             UP             52:54:00:92:11:47 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+[vagrant@selinux ~]$
+[vagrant@selinux ~]$ ip link
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP mode DEFAULT group default qlen 1000
+    link/ether 52:54:00:59:2e:0c brd ff:ff:ff:ff:ff:ff
+    altname enp0s5
+    altname ens5
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP mode DEFAULT group default qlen 1000
+    link/ether 52:54:00:92:11:47 brd ff:ff:ff:ff:ff:ff
+    altname enp0s6
+    altname ens6
+[vagrant@selinux ~]$ ip addr
+<...>
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 52:54:00:59:2e:0c brd ff:ff:ff:ff:ff:ff
+    altname enp0s5
+    altname ens5
+    inet 192.168.121.226/24 brd 192.168.121.255 scope global dynamic noprefixroute eth0
+       valid_lft 3091sec preferred_lft 3091sec
+    inet6 fe80::d4b4:6edc:311:9c69/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 52:54:00:92:11:47 brd ff:ff:ff:ff:ff:ff
+    altname enp0s6
+    altname ens6
+    inet 192.168.56.10/24 brd 192.168.56.255 scope global noprefixroute eth1
+       valid_lft forever preferred_lft forever
+    inet6 fe80::5054:ff:fe92:1147/64 scope link 
+       valid_lft forever preferred_lft forever
+[vagrant@selinux ~]$ 
+[vagrant@selinux ~]$ bridge link show
+[vagrant@selinux ~]$
+[vagrant@selinux ~]$ lspci | grep -i net
+00:05.0 Ethernet controller: Red Hat, Inc. Virtio network device
+00:06.0 Ethernet controller: Red Hat, Inc. Virtio network device
+[vagrant@selinux ~]$ 
+```
+
+На хост-машине интерфейсы и конфигурации видны следующие:
+
+```
+[admin_insta11@mv334 lab-almalinux9-kvm]$ ifconfig
+<...>
+virbr1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.121.1  netmask 255.255.255.0  broadcast 192.168.121.255
+        ether 52:54:00:e1:a4:a4  txqueuelen 1000  (Ethernet)
+        RX packets 36141  bytes 1754125 (1.6 MiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 62663  bytes 88736163 (84.6 MiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+virbr2: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.56.1  netmask 255.255.255.0  broadcast 192.168.56.255
+        ether 52:54:00:d6:81:ea  txqueuelen 1000  (Ethernet)
+        RX packets 35  bytes 3248 (3.1 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 20  bytes 2317 (2.2 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+vnet1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet6 fe80::fc54:ff:fe59:2e0c  prefixlen 64  scopeid 0x20<link>
+        ether fe:54:00:59:2e:0c  txqueuelen 1000  (Ethernet)
+        RX packets 36141  bytes 2260099 (2.1 MiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 62780  bytes 88743555 (84.6 MiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+vnet2: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet6 fe80::fc54:ff:fe92:1147  prefixlen 64  scopeid 0x20<link>
+        ether fe:54:00:92:11:47  txqueuelen 1000  (Ethernet)
+        RX packets 35  bytes 3738 (3.6 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 137  bytes 9709 (9.4 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+[admin_insta11@mv334 lab-almalinux9-kvm]$
+[admin_insta11@mv334 lab-almalinux9-kvm]$ ip link
+<...>
+8: virbr1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000
+    link/ether 52:54:00:e1:a4:a4 brd ff:ff:ff:ff:ff:ff
+9: virbr2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000
+    link/ether 52:54:00:d6:81:ea brd ff:ff:ff:ff:ff:ff
+10: vnet1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master virbr1 state UNKNOWN mode DEFAULT group default qlen 1000
+    link/ether fe:54:00:59:2e:0c brd ff:ff:ff:ff:ff:ff
+11: vnet2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master virbr2 state UNKNOWN mode DEFAULT group default qlen 1000
+    link/ether fe:54:00:92:11:47 brd ff:ff:ff:ff:ff:ff
+[admin_insta11@mv334 lab-almalinux9-kvm]$
+[admin_insta11@mv334 lab-almalinux9-kvm]$ ip addr
+<...>
+8: virbr1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether 52:54:00:e1:a4:a4 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.121.1/24 brd 192.168.121.255 scope global virbr1
+       valid_lft forever preferred_lft forever
+9: virbr2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether 52:54:00:d6:81:ea brd ff:ff:ff:ff:ff:ff
+    inet 192.168.56.1/24 brd 192.168.56.255 scope global virbr2
+       valid_lft forever preferred_lft forever
+10: vnet1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master virbr1 state UNKNOWN group default qlen 1000
+    link/ether fe:54:00:59:2e:0c brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::fc54:ff:fe59:2e0c/64 scope link 
+       valid_lft forever preferred_lft forever
+11: vnet2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master virbr2 state UNKNOWN group default qlen 1000
+    link/ether fe:54:00:92:11:47 brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::fc54:ff:fe92:1147/64 scope link 
+       valid_lft forever preferred_lft forever
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ ip neigh show dev virbr1
+192.168.121.226 lladdr 52:54:00:59:2e:0c REACHABLE 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ ip neigh show dev virbr2
+192.168.56.10 lladdr 52:54:00:92:11:47 STALE 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+[admin_insta11@mv334 lab-almalinux9-kvm]$ brctl show
+bridge name	bridge id		STP enabled	interfaces
+virbr1		8000.525400e1a4a4	yes		vnet1
+virbr2		8000.525400d681ea	yes		vnet2
+[admin_insta11@mv334 lab-almalinux9-kvm]$
+[admin_insta11@mv334 lab-almalinux9-kvm]$ for i in /sys/class/net/vnet*; do
+  dev=$(basename "$i")
+  echo -n "$dev -> "
+  bridge link show dev "$dev" | awk '/master/ {for(j=1;j<=NF;j++) if($j=="master") print $(j+1)}'
+done
+vnet1 -> virbr1
+vnet2 -> virbr2
+[admin_insta11@mv334 lab-almalinux9-kvm]$
+[admin_insta11@mv334 lab-almalinux9-kvm]$ sudo ls -la /proc/$(pgrep -f qemu-system | head -1)/fd/ 2>/dev/null | grep tun
+[sudo] пароль для admin_insta11: 
+lrwx------ 1 qemu qemu 64 сен  5 20:44 41 -> /dev/net/tun
+lrwx------ 1 qemu qemu 64 сен  5 20:44 44 -> /dev/net/tun
+[admin_insta11@mv334 lab-almalinux9-kvm]$
+[admin_insta11@mv334 lab-almalinux9-kvm]$ cat /proc/$(pgrep -f qemu-system | head -1)/cmdline | tr '\0' '\n' | grep -A1 'netdev'
+-netdev
+{"type":"tap","fd":"41","vhost":true,"vhostfd":"43","id":"hostua-net-0"}
+--
+{"driver":"virtio-net-pci","iommu_platform":false,"netdev":"hostua-net-0","id":"ua-net-0","mac":"52:54:00:59:2e:0c","bus":"pci.0","addr":"0x5"}
+-netdev
+{"type":"tap","fd":"44","vhost":true,"vhostfd":"45","id":"hostua-net-1"}
+--
+{"driver":"virtio-net-pci","iommu_platform":false,"netdev":"hostua-net-1","id":"ua-net-1","mac":"52:54:00:92:11:47","bus":"pci.0","addr":"0x6"}
+-chardev
+[admin_insta11@mv334 lab-almalinux9-kvm]$ 
+```
+
+Все эти конфигурации показывают следующее:
+
+- libvirt/kvm для связности ВМ и хоста использует мосты,  в результате на портах Ethernet eth0 и eth1 в ВМ установлены IP-адреса,
+доступные с хостовой машины. Для запущенной виртуальной машины организовано два моста:
+
+Гостевая ОС (AlmaLinux)
+  ↓ virtio-net (ens5/eth0)  IP: 192.168.121.226/24, MAC: 52:54:00:59:2e:0c
+TAP-интерфейс (vnet0) на хосте  IP: - , MAC: fe:54:00:59:2e:0c  
+  ↓ добавлен в bridge
+Мост (virbr0)  на хосте IP: 192.168.121.1/24, MAC: 52:54:00:e1:a4:a4
+Физический интерфейс (enp3s0) или другой путь наружу
+
+В команде ip addr show vnet0 на хосте, у интерфейса TAP vnet0 не будет IP‑адреса. Это нормально: TAP в такой схеме — это «порт коммутатора», а IP есть у моста (virbr0), а не у порта.
+
+
+
+```
+
+```
