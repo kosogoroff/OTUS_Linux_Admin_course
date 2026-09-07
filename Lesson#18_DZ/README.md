@@ -1536,13 +1536,224 @@ ip link add br-test type bridge
 Сетевая связность между ВМ на основе libvirt и хостом осуществляется
 
 
+## 3.3 Различные режимы работы сети kvm/libvirt и virtualbox. Какие интерфейсы создаются в различных режимах работы сетей kvm/libvirt и virtualbox
 
 
-## VirtualBox: какие интерфейсы создаются
+## 3.3.1 KVM/libvirt: какие интерфейсы создаются
+
+KVM использует стандартный Linux-сетевой стек: Linux-bridge + TAP-устройства. Всё прозрачно и видно через ip addr, brctl show, virsh.
+
+### 3.3.1.1 Режим NAT (сеть default в libvirt)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Хост (RED OS)                                                │
+│                                                              │
+│  enp3s0: 192.168.1.50 (физический)                           │
+│                                                              │
+│  virbr0: 192.168.122.1 ←─── Linux-bridge, созданный libvirt  │
+│  ├─ dnsmasq: DHCP 192.168.122.2–254, DNS                     │
+│  ├─ vnet0 (TAP) ─────────────┐                               │
+│  │                           │                               │
+│  ┌───────────────────────────┴────────────────────────────┐  │
+│  │ Гостевая ВМ (AlmaLinux)                                │  │
+│  │                                                        │  │
+│  │  ens3 (или eth0): 192.168.122.50                       │  │
+│  │  шлюз: 192.168.122.1 (= virbr0)                        │  │
+│  └────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+Что создаётся на хосте:
+
+    virbr0 — Linux-bridge (мост). Это настоящий сетевой интерфейс ядра Linux, созданный libvirt. У него IP 192.168.122.1, он работает как шлюз и DNS-сервер (через dnsmasq).
+    vnet0 — TAP-устройство. Каждый раз, когда запускается ВМ, libvirt создаёт TAP-интерфейс и подключает его к virbr0. Один TAP = одна ВМ.
+    Видно через ip link show vnet0 и brctl show virbr0.
+
+Что создаётся в ВМ:
+
+    Интерфейс ens3 (virtio-net) с IP 192.168.122.50 (от DHCP libvirt).
+    Шлюз 192.168.122.1 — это virbr0 на хосте.
+
+Как связаны:
+
+    Трафик ВМ → ens3 → vnet0 (TAP) → virbr0 (bridge) → NAT через iptables/nftables → enp3s0 → интернет.
+    Хост → ВМ: напрямую по IP, без проброса портов. curl http://192.168.122.50:4881 работает «из коробки».
+
+
+**Примечание:** чтобы реализовать в kvm/libvirt режим режим аналогичный режиму работы в virtualbox (доступ с хоста к nginx командой curl http://localhost:4881 ),
+необходимо дополнительно использовать настройку iptables (так как libvirt сам по себе не поддерживает проброс портов). Vagrantfile для реализации такого режима
+работы сети приведён ниже:
+
+```
+MACHINES = {
+  :"selinux" => {
+              :box_name => "almalinux9-stand",
+              :cpus => 2,
+              :memory => 2048
+            }
+}
+
+GUEST_IP = "192.168.56.10"
+HOST_PORT = 4881
+GUEST_PORT = 4881
+
+Vagrant.configure("2") do |config|
+  MACHINES.each do |boxname, boxconfig|
+    config.vm.synced_folder ".", "/vagrant", disabled: true
+    config.vm.define boxname do |box|
+      box.vm.box = boxconfig[:box_name]
+      box.vm.host_name = boxname.to_s
+
+      # Фиксированный IP в приватной сети (нужен для iptables-правил)
+      box.vm.network "private_network", ip: GUEST_IP
+
+      box.vm.provider "libvirt" do |v|
+        v.memory = boxconfig[:memory]
+        v.cpus = boxconfig[:cpus]
+      end
+
+      box.vm.provision "shell", inline: <<-SHELL
+        dnf install -y epel-release
+        dnf install -y nginx
+        dnf install -y setroubleshoot-server selinux-policy-mls setools-console policycoreutils-python-utils policycoreutils-newrole
+        sed -ie 's/:80/:4881/g' /etc/nginx/nginx.conf
+        sed -i 's/listen       80;/listen       4881;/' /etc/nginx/nginx.conf
+        systemctl start nginx
+        systemctl status nginx
+        ss -tlpn | grep 4881
+      SHELL
+
+      # === iptables NAT: localhost:4881 → ВМ:4881 ===
+      # Срабатывает после vagrant up
+      config.trigger.after :up do |trigger|
+        trigger.name = "iptables-nat-up"
+        trigger.info = "Setting up iptables DNAT: localhost:#{HOST_PORT} → #{GUEST_IP}:#{GUEST_PORT}"
+        trigger.run = { inline: <<-BASH
+          # DNAT для внешнего трафика (PREROUTING)
+          iptables -t nat -C PREROUTING -p tcp --dport #{HOST_PORT} -j DNAT --to-destination #{GUEST_IP}:#{GUEST_PORT} 2>/dev/null || \
+          iptables -t nat -A PREROUTING -p tcp --dport #{HOST_PORT} -j DNAT --to-destination #{GUEST_IP}:#{GUEST_PORT}
+
+          # DNAT для локального трафика (OUTPUT — для curl http://localhost:4881)
+          iptables -t nat -C OUTPUT -p tcp -d 127.0.0.1 --dport #{HOST_PORT} -j DNAT --to-destination #{GUEST_IP}:#{GUEST_PORT} 2>/dev/null || \
+          iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 --dport #{HOST_PORT} -j DNAT --to-destination #{GUEST_IP}:#{GUEST_PORT}
+
+          # Разрешаем форвардинг
+          iptables -C FORWARD -p tcp -d #{GUEST_IP} --dport #{GUEST_PORT} -j ACCEPT 2>/dev/null || \
+          iptables -I FORWARD -p tcp -d #{GUEST_IP} --dport #{GUEST_PORT} -j ACCEPT
+        BASH
+        }
+      end
+
+      # Чистим правила после vagrant halt/destroy
+      config.trigger.after :halt do |trigger|
+        trigger.name = "iptables-nat-halt"
+        trigger.run = { inline: <<-BASH
+          iptables -t nat -D PREROUTING -p tcp --dport #{HOST_PORT} -j DNAT --to-destination #{GUEST_IP}:#{GUEST_PORT} 2>/dev/null
+          iptables -t nat -D OUTPUT -p tcp -d 127.0.0.1 --dport #{HOST_PORT} -j DNAT --to-destination #{GUEST_IP}:#{GUEST_PORT} 2>/dev/null
+          iptables -D FORWARD -p tcp -d #{GUEST_IP} --dport #{GUEST_PORT} -j ACCEPT 2>/dev/null
+        BASH
+        }
+      end
+
+      config.trigger.after :destroy do |trigger|
+        trigger.name = "iptables-nat-destroy"
+        trigger.run = { inline: <<-BASH
+          iptables -t nat -D PREROUTING -p tcp --dport #{HOST_PORT} -j DNAT --to-destination #{GUEST_IP}:#{GUEST_PORT} 2>/dev/null
+          iptables -t nat -D OUTPUT -p tcp -d 127.0.0.1 --dport #{HOST_PORT} -j DNAT --to-destination #{GUEST_IP}:#{GUEST_PORT} 2>/dev/null
+          iptables -D FORWARD -p tcp -d #{GUEST_IP} --dport #{GUEST_PORT} -j ACCEPT 2>/dev/null
+        BASH
+        }
+      end
+    end
+  end
+end
+```
+
+### Что здесь происходит
+
+Три цепочки iptables, и каждая делает свою часть: 
+
+1. PREROUTING (nat) — для внешнего трафика
+
+Пакет извне → eth0 хоста:4881 → DNAT → 192.168.56.10:4881
+
+Если кто-то с другой машины в сети зайдёт на http://<ip-хоста>:4881, пакет попадёт в PREROUTING и будет перенаправлен в ВМ.
+
+2. OUTPUT (nat) — для локального трафика
+
+curl http://localhost:4881 → OUTPUT → DNAT → 192.168.56.10:4881
+
+Это ключевое правило, без которого curl http://localhost:4881 не работает. PREROUTING не обрабатывает пакеты, которые генерирует сам хост — для них нужна цепочка OUTPUT в таблице nat. 
+
+3. FORWARD (filter) — разрешить пересылку
+
+iptables -I FORWARD -p tcp -d 192.168.56.10 --dport 4881 -j ACCEPT
+
+По умолчанию libvirt ставит правила REJECT для FORWARD. Это правило разрешает пересылку DNAT-пакетов к ВМ.
+
+Проверка после vagrant up
+
+```
+# По localhost (как в VirtualBox NAT)
+curl -s http://localhost:4881 | head -5
+
+# Напрямую по IP (как было раньше)
+curl -s http://192.168.56.10:4881 | head -5
+
+# Посмотреть правила
+sudo iptables -t nat -L -n --line-numbers | grep 4881
+```
+
+Важный нюанс: -C перед -A
+
+В правилах используется конструкция iptables -t nat -C ... 2>/dev/null || iptables -t nat -A ... — это проверка «есть ли уже такое правило?». Если правило уже существует (-C возвращает 0), оно не дублируется. Если нет — добавляется. Это защищает от дублей при повторном vagrant up без halt.
+
+
+
+## 3.3.1.2 Режим Isolated / Private (private_network с фиксированным IP в Vagrant)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Хост (RED OS)                                                │
+│                                                              │
+│  virbr1: 192.168.56.1 ←─── ещё один Linux-bridge             │
+│  ├─ vnet1 (TAP) ─────────────┐                               │
+│  │                           │                               │
+│  ┌───────────────────────────┴────────────────────────────┐  │
+│  │ Гостевая ВМ (AlmaLinux)                                │  │
+│  │  ens4: 192.168.56.10                                   │  │
+│  └────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+То же самое, но без NAT и без выхода в интернет. Только изолированная сеть между хостом и ВМ.
+
+### 3.3.1.3 Режим Bridged (мост к физической сети)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Хост (RED OS)                                                │
+│                                                              │
+│  enp3s0: 192.168.1.50 ── добавлен в мост br0                 │
+│  br0: 192.168.1.50 (IP переехал сюда)                        │
+│  ├─ vnet0 (TAP) ─────────────┐                               │
+│  │                           │                               │
+│  ┌───────────────────────────┴────────────────────────────┐  │
+│  │ Гостевая ВМ (AlmaLinux)                                │  │
+│  │  ens3: 192.168.1.51 (от физического DHCP-сервера)      │  │
+│  └────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+Физический интерфейс хоста enp3s0 включается в мост br0, IP переезжает с enp3s0 на br0. ВМ через TAP подключается к тому же мосту — и получает IP из физической сети.
+
+
+## 3.3.2 VirtualBox: какие интерфейсы создаются
 
 VirtualBox использует собственный сетевой стек, который не зависит от Linux-bridge и TAP — он реализован внутри модуля ядра vboxdrv/vboxnetadp.
 
-### Режим NAT (по умолчанию в твоём Vagrantfile с forwarded_port)
+### 3.3.2.1 Режим NAT (по умолчанию в твоём Vagrantfile с forwarded_port)
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -1580,7 +1791,7 @@ VirtualBox использует собственный сетевой стек, 
     ВМ → интернет: трафик идёт через внутренний NAT VirtualBox, который подменяет адрес и выпускает через физический интерфейс хоста.
     Хост → ВМ: только через проброс портов (forwarded_port). Напрямую по IP 10.0.2.15 с хоста не достучаться.
 
-### Режим Host-Only (private_network с фиксированным IP)
+### 3.3.2.2 Режим Host-Only (private_network с фиксированным IP)
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -1614,7 +1825,51 @@ VirtualBox использует собственный сетевой стек, 
     vboxnet0 (хост) и enp0s8 (ВМ) — в одной виртуальной сети. Хост может пинговать ВМ напрямую по IP, ВМ может пинговать хост.
     Но интернета у ВМ в этом режиме нет (если не добавить NAT-адаптер первым).
 
-### Режим Bridged
+Vagrantfile для реализации такого режима работы сети virtualbox приведён ниже:
+
+```
+MACHINES = {
+  :"selinux" => {
+              :box_name => "almalinux9-stand-vb",
+              :cpus => 2,
+              :memory => 2048
+            }
+}
+
+Vagrant.configure("2") do |config|
+  MACHINES.each do |boxname, boxconfig|
+    config.vm.synced_folder ".", "/vagrant", disabled: true
+    config.vm.define boxname do |box|
+      box.vm.box = boxconfig[:box_name]
+      box.vm.host_name = boxname.to_s
+
+      # Доступ по IP напрямую (как в KVM через private_network)
+      box.vm.network "private_network", ip: "192.168.56.10"
+
+      box.vm.provider "virtualbox" do |v|
+        v.memory = boxconfig[:memory]
+        v.cpus = boxconfig[:cpus]
+      end
+
+      box.vm.provision "shell", inline: <<-SHELL
+        yum install -y epel-release
+        yum install -y nginx
+        yum install -y setroubleshoot-server selinux-policy-mls setools-console policycoreutils-python-utils policycoreutils-newrole
+        sed -ie 's/:80/:4881/g' /etc/nginx/nginx.conf
+        sed -i 's/listen       80;/listen       4881;/' /etc/nginx/nginx.conf
+        systemctl start nginx
+        systemctl status nginx
+        ss -tlpn | grep 4881
+      SHELL
+    end
+  end
+end
+
+```
+
+
+
+### 3.3.2.3 Режим Bridged
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -1634,85 +1889,8 @@ VirtualBox использует собственный сетевой стек, 
 
 
 
-## KVM/libvirt: какие интерфейсы создаются
 
-KVM использует стандартный Linux-сетевой стек: Linux-bridge + TAP-устройства. Всё прозрачно и видно через ip addr, brctl show, virsh.
-
-### Режим NAT (сеть default в libvirt)
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ Хост (RED OS)                                                │
-│                                                              │
-│  enp3s0: 192.168.1.50 (физический)                           │
-│                                                              │
-│  virbr0: 192.168.122.1 ←─── Linux-bridge, созданный libvirt  │
-│  ├─ dnsmasq: DHCP 192.168.122.2–254, DNS                     │
-│  ├─ vnet0 (TAP) ─────────────┐                               │
-│  │                           │                               │
-│  ┌───────────────────────────┴────────────────────────────┐  │
-│  │ Гостевая ВМ (AlmaLinux)                                │  │
-│  │                                                        │  │
-│  │  ens3 (или eth0): 192.168.122.50                       │  │
-│  │  шлюз: 192.168.122.1 (= virbr0)                        │  │
-│  └────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-```
-
-Что создаётся на хосте:
-
-    virbr0 — Linux-bridge (мост). Это настоящий сетевой интерфейс ядра Linux, созданный libvirt. У него IP 192.168.122.1, он работает как шлюз и DNS-сервер (через dnsmasq).
-    vnet0 — TAP-устройство. Каждый раз, когда запускается ВМ, libvirt создаёт TAP-интерфейс и подключает его к virbr0. Один TAP = одна ВМ.
-    Видно через ip link show vnet0 и brctl show virbr0.
-
-Что создаётся в ВМ:
-
-    Интерфейс ens3 (virtio-net) с IP 192.168.122.50 (от DHCP libvirt).
-    Шлюз 192.168.122.1 — это virbr0 на хосте.
-
-Как связаны:
-
-    Трафик ВМ → ens3 → vnet0 (TAP) → virbr0 (bridge) → NAT через iptables/nftables → enp3s0 → интернет.
-    Хост → ВМ: напрямую по IP, без проброса портов. curl http://192.168.122.50:4881 работает «из коробки».
-
-## Режим Isolated / Private (private_network с фиксированным IP в Vagrant)
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ Хост (RED OS)                                                │
-│                                                              │
-│  virbr1: 192.168.56.1 ←─── ещё один Linux-bridge             │
-│  ├─ vnet1 (TAP) ─────────────┐                               │
-│  │                           │                               │
-│  ┌───────────────────────────┴────────────────────────────┐  │
-│  │ Гостевая ВМ (AlmaLinux)                                │  │
-│  │  ens4: 192.168.56.10                                   │  │
-│  └────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-```
-
-То же самое, но без NAT и без выхода в интернет. Только изолированная сеть между хостом и ВМ.
-
-### Режим Bridged (мост к физической сети)
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ Хост (RED OS)                                                │
-│                                                              │
-│  enp3s0: 192.168.1.50 ── добавлен в мост br0                 │
-│  br0: 192.168.1.50 (IP переехал сюда)                        │
-│  ├─ vnet0 (TAP) ─────────────┐                               │
-│  │                           │                               │
-│  ┌───────────────────────────┴────────────────────────────┐  │
-│  │ Гостевая ВМ (AlmaLinux)                                │  │
-│  │  ens3: 192.168.1.51 (от физического DHCP-сервера)      │  │
-│  └────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-```
-
-Физический интерфейс хоста enp3s0 включается в мост br0, IP переезжает с enp3s0 на br0. ВМ через TAP подключается к тому же мосту — и получает IP из физической сети.
-
-Сводная таблица режимов работы сетей virtualbox и libvirt/kvm
+### 3.3.3 Сводная таблица режимов работы сетей virtualbox и libvirt/kvm
 
 | Параметр	| VirtualBox (NAT)	| VirtualBox (Host-Only)	| KVM/libvirt (NAT)	| KVM/libvirt (Private) |
 |:------------------|:------------------------|:-------------------|:-----------------------------|:------------------------------|
