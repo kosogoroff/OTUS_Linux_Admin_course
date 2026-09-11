@@ -1053,3 +1053,1684 @@ Sep 10 18:37:11 selinux systemd[1]: Failed to start The nginx HTTP and reverse p
 
 ## Обеспечение работоспособности приложения при включенном SELinux
 
+Выполняем клонирование репозитория, переходим в него, модифицируем исходный Vagrantfile репозитория для работы в гипервизоре kvm/libvirt и с локально установленным боксом almalinux/9. Исходный файл для virtualbox:
+
+```
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+  config.vm.box = "almalinux/9"
+  config.vm.box_version = "9.4.20240805"
+  config.vm.provision "ansible" do |ansible|
+    #ansible.verbose = "vvv"
+    ansible.playbook = "provisioning/playbook.yml"
+    ansible.become = "true"
+  end
+
+  config.vm.provider "virtualbox" do |v|
+	  v.memory = 2048
+    v.cpus = 2    
+  end
+
+  config.vm.define "ns01" do |ns01|
+    ns01.vm.synced_folder ".", "/vagrant", disabled: true
+    ns01.vm.network "private_network", ip: "192.168.50.10", virtualbox__intnet: "dns"
+    ns01.vm.hostname = "ns01"
+  end
+
+  config.vm.define "client" do |client|
+    client.vm.synced_folder ".", "/vagrant", disabled: true
+    client.vm.network "private_network", ip: "192.168.50.15", virtualbox__intnet: "dns"
+    client.vm.hostname = "client"
+  end
+
+end
+```
+
+Модифицированный Vagrantfile для kvm/libvirt:
+
+```
+[admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$ cat Vagrantfile 
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+  config.vm.box = "almalinux9-stand"
+#  config.vm.box_version = "9.4.20240805"
+
+  config.vm.provision "ansible" do |ansible|
+    #ansible.verbose = "vvv"
+    ansible.playbook = "provisioning/playbook.yml"
+    ansible.become = "true"
+  end
+
+  config.vm.provider "libvirt" do |v|
+    v.memory = 2048
+    v.cpus = 2
+  end
+
+  config.vm.define "ns01" do |ns01|
+    ns01.vm.synced_folder ".", "/vagrant", disabled: true
+    ns01.vm.network "private_network",
+      ip: "192.168.50.10",
+      libvirt__network_name: "dns",
+      libvirt__host_ip: "192.168.50.1",
+      libvirt__netmask: "255.255.255.0"
+    ns01.vm.hostname = "ns01"
+  end
+
+  config.vm.define "client" do |client|
+    client.vm.synced_folder ".", "/vagrant", disabled: true
+    client.vm.network "private_network",
+      ip: "192.168.50.15",
+      libvirt__network_name: "dns",
+      libvirt__host_ip: "192.168.50.1",
+      libvirt__netmask: "255.255.255.0"
+    client.vm.hostname = "client"
+  end
+end
+[admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$
+```
+
+Создаём учебный стенд с помощью vargant и провизионинга ansible:
+
+```
+[admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$ vagrant up
+Bringing machine 'ns01' up with 'libvirt' provider...
+Bringing machine 'client' up with 'libvirt' provider...
+==> client: No version detected for almalinux9-stand, using timestamp to watch for modifications. Consider
+==> client: generating a local metadata for the box with a version to allow better handling.
+==> client: See https://www.vagrantup.com/docs/boxes/format#box-metadata for further details.
+==> ns01: No version detected for almalinux9-stand, using timestamp to watch for modifications. Consider
+==> ns01: generating a local metadata for the box with a version to allow better handling.
+==> ns01: See https://www.vagrantup.com/docs/boxes/format#box-metadata for further details.
+==> client: Creating image (snapshot of base box volume).
+==> ns01: Creating image (snapshot of base box volume).
+==> client: Creating domain with the following settings...
+==> ns01: Creating domain with the following settings...
+==> client:  -- Name:              vagrant_selinux_dns_problems_kvm_client
+==> ns01:  -- Name:              vagrant_selinux_dns_problems_kvm_ns01
+==> client:  -- Description:       Source: /home/admin_insta11/vagrant_selinux_dns_problems_kvm/Vagrantfile
+==> ns01:  -- Description:       Source: /home/admin_insta11/vagrant_selinux_dns_problems_kvm/Vagrantfile
+==> client:  -- Domain type:       kvm
+==> ns01:  -- Domain type:       kvm
+==> client:  -- Cpus:              2
+==> ns01:  -- Cpus:              2
+==> client:  -- Feature:           acpi
+==> ns01:  -- Feature:           acpi
+==> client:  -- Feature:           apic
+==> ns01:  -- Feature:           apic
+==> client:  -- Feature:           pae
+==> ns01:  -- Feature:           pae
+==> client:  -- Clock offset:      utc
+==> ns01:  -- Clock offset:      utc
+==> client:  -- Memory:            2048M
+==> ns01:  -- Memory:            2048M
+==> client:  -- Base box:          almalinux9-stand
+==> ns01:  -- Base box:          almalinux9-stand
+==> client:  -- Storage pool:      default
+==> ns01:  -- Storage pool:      default
+==> client:  -- Image(vda):        /var/lib/libvirt/images/vagrant_selinux_dns_problems_kvm_client.img, virtio, 20G
+==> ns01:  -- Image(vda):        /var/lib/libvirt/images/vagrant_selinux_dns_problems_kvm_ns01.img, virtio, 20G
+==> client:  -- Disk driver opts:  cache='default'
+==> ns01:  -- Disk driver opts:  cache='default'
+==> client:  -- Graphics Type:     vnc
+==> ns01:  -- Graphics Type:     vnc
+==> client:  -- Video Type:        cirrus
+==> ns01:  -- Video Type:        cirrus
+==> client:  -- Video VRAM:        16384
+==> ns01:  -- Video VRAM:        16384
+==> client:  -- Video 3D accel:    false
+==> ns01:  -- Video 3D accel:    false
+==> client:  -- Keymap:            en-us
+==> ns01:  -- Keymap:            en-us
+==> client:  -- TPM Backend:       passthrough
+==> ns01:  -- TPM Backend:       passthrough
+==> client:  -- INPUT:             type=mouse, bus=ps2
+==> ns01:  -- INPUT:             type=mouse, bus=ps2
+==> client: Creating shared folders metadata...
+==> ns01: Creating shared folders metadata...
+==> client: Starting domain.
+==> ns01: Starting domain.
+==> client: Domain launching with graphics connection settings...
+==> ns01: Domain launching with graphics connection settings...
+==> client:  -- Graphics Port:      5901
+==> ns01:  -- Graphics Port:      5902
+==> client:  -- Graphics IP:        127.0.0.1
+==> ns01:  -- Graphics IP:        127.0.0.1
+==> client:  -- Graphics Password:  Not defined
+==> ns01:  -- Graphics Password:  Not defined
+==> client:  -- Graphics Websocket: 5700
+==> ns01:  -- Graphics Websocket: 5701
+==> client: Waiting for domain to get an IP address...
+==> ns01: Waiting for domain to get an IP address...
+==> client: Waiting for machine to boot. This may take a few minutes...
+==> ns01: Waiting for machine to boot. This may take a few minutes...
+    client: SSH address: 192.168.121.66:22
+    ns01: SSH address: 192.168.121.134:22
+    client: SSH username: vagrant
+    client: SSH auth method: private key
+    ns01: SSH username: vagrant
+    ns01: SSH auth method: private key
+    client: Warning: Connection refused. Retrying...
+    client: 
+    client: Vagrant insecure key detected. Vagrant will automatically replace
+    client: this with a newly generated keypair for better security.
+    ns01: 
+    ns01: Vagrant insecure key detected. Vagrant will automatically replace
+    ns01: this with a newly generated keypair for better security.
+    client: 
+    client: Inserting generated public key within guest...
+    ns01: 
+    ns01: Inserting generated public key within guest...
+    client: Removing insecure key from the guest if it's present...
+    ns01: Removing insecure key from the guest if it's present...
+    ns01: Key inserted! Disconnecting and reconnecting using new SSH key...
+    client: Key inserted! Disconnecting and reconnecting using new SSH key...
+==> client: Machine booted and ready!
+==> client: Setting hostname...
+==> ns01: Machine booted and ready!
+==> ns01: Setting hostname...
+==> ns01: Configuring and enabling network interfaces...
+==> client: Configuring and enabling network interfaces...
+==> ns01: Running provisioner: ansible...
+==> client: Running provisioner: ansible...
+    ns01: Running ansible-playbook...
+    client: Running ansible-playbook...
+
+PLAY [all] *********************************************************************
+
+PLAY [all] *********************************************************************
+
+TASK [Gathering Facts] *********************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [client]
+
+TASK [install packages] ********************************************************
+ok: [ns01]
+
+TASK [install packages] ********************************************************
+changed: [client]
+
+PLAY [ns01] ********************************************************************
+skipping: no hosts matched
+
+PLAY [client] ******************************************************************
+
+TASK [Gathering Facts] *********************************************************
+changed: [ns01]
+
+PLAY [ns01] ********************************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [client]
+
+TASK [copy resolv.conf to the client] ******************************************
+ok: [ns01]
+
+TASK [copy named.conf] *********************************************************
+changed: [client]
+
+TASK [copy rndc conf file] *****************************************************
+changed: [ns01]
+
+TASK [copy master zone dns.lab] ************************************************
+changed: [client]
+
+TASK [copy motd to the client] *************************************************
+changed: [ns01] => (item=/home/admin_insta11/vagrant_selinux_dns_problems_kvm/provisioning/files/ns01/named.dns.lab.view1)
+changed: [client]
+
+TASK [copy transferkey to client] **********************************************
+changed: [ns01] => (item=/home/admin_insta11/vagrant_selinux_dns_problems_kvm/provisioning/files/ns01/named.dns.lab)
+
+TASK [copy dynamic zone ddns.lab] **********************************************
+changed: [client]
+
+PLAY RECAP *********************************************************************
+client                     : ok=7    changed=5    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+changed: [ns01]
+
+TASK [copy dynamic zone ddns.lab.view1] ****************************************
+changed: [ns01]
+
+TASK [copy master zone newdns.lab] *********************************************
+changed: [ns01]
+
+TASK [copy rev zones] **********************************************************
+changed: [ns01]
+
+TASK [copy resolv.conf to server] **********************************************
+changed: [ns01]
+
+TASK [copy transferkey to server] **********************************************
+changed: [ns01]
+
+TASK [set /etc/named permissions] **********************************************
+changed: [ns01]
+
+TASK [set /etc/named/dynamic permissions] **************************************
+changed: [ns01]
+
+TASK [ensure named is running and enabled] *************************************
+changed: [ns01]
+
+PLAY [client] ******************************************************************
+skipping: no hosts matched
+
+PLAY RECAP *********************************************************************
+ns01                       : ok=14   changed=12   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$
+[admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$ sudo virsh list
+[sudo] пароль для admin_insta11: 
+ ID   Имя                                       Состояние
+-----------------------------------------------------------
+ 1    ubuntu-24.04-01                           работает
+ 2    vagrant_selinux_dns_problems_kvm_client   работает
+ 3    vagrant_selinux_dns_problems_kvm_ns01     работает
+
+[admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$
+```
+
+Далее выполняем непосредственно лобораторную работу. Подключаемся к ВМ client, пытаемся выполнить изменение динамической зоны DNS на сервере DNS в ВМ ns01 - изменения зоны не выполняются, выдаётся ошибка 'update failed: SERVFAIL':
+
+```
+[admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$ vagrant status
+Current machine states:
+
+ns01                      running (libvirt)
+client                    running (libvirt)
+
+This environment represents multiple VMs. The VMs are all listed
+above with their current state. For more information about a specific
+VM, run `vagrant status NAME`.
+[admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$ vagrant ssh client
+###############################
+### Welcome to the DNS lab! ###
+###############################
+
+- Use this client to test the enviroment
+- with dig or nslookup. Ex:
+    dig @192.168.50.10 ns01.dns.lab
+
+- nsupdate is available in the ddns.lab zone. Ex:
+    nsupdate -k /etc/named.zonetransfer.key
+    server 192.168.50.10
+    zone ddns.lab 
+    update add www.ddns.lab. 60 A 192.168.50.15
+    send
+
+- rndc is also available to manage the servers
+    rndc -c ~/rndc.conf reload
+
+###############################
+### Enjoy! ####################
+###############################
+Last login: Fri Sep 11 14:39:23 2026 from 192.168.121.1
+[vagrant@client ~]$
+[vagrant@client ~]$ ping 192.168.50.10
+PING 192.168.50.10 (192.168.50.10) 56(84) bytes of data.
+64 bytes from 192.168.50.10: icmp_seq=1 ttl=64 time=0.508 ms
+64 bytes from 192.168.50.10: icmp_seq=2 ttl=64 time=0.659 ms
+64 bytes from 192.168.50.10: icmp_seq=3 ttl=64 time=0.728 ms
+^C
+--- 192.168.50.10 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2069ms
+rtt min/avg/max/mdev = 0.508/0.631/0.728/0.091 ms
+[vagrant@client ~]$
+[vagrant@client ~]$ nsupdate -k /etc/named.zonetransfer.key
+> server 192.168.50.10
+> zone ddns.lab
+> update add www.ddns.lab. 60 A 192.168.50.15
+> send
+update failed: SERVFAIL
+> quit
+[vagrant@client ~]$ 
+```
+
+В логе SELinux нет ошибок:
+
+```
+[vagrant@client ~]$ sudo -i
+[root@client ~]# 
+[root@client ~]# cat /var/log/audit/audit.log | audit2why
+[root@client ~]#
+```
+
+Проверяем на ВМ севера ns01:
+
+```
+[admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$ vagrant ssh ns01
+Last login: Fri Sep 11 14:39:30 2026 from 192.168.121.1
+[vagrant@ns01 ~]$
+[vagrant@ns01 ~]$ sudo -i
+[root@ns01 ~]# 
+[root@ns01 ~]# cat /var/log/audit/audit.log | audit2why
+type=AVC msg=audit(1789138634.020:1535): avc:  denied  { write } for  pid=9527 comm="isc-net-0001" name="dynamic" dev="vda4" ino=1926 scontext=system_u:system_r:named_t:s0 tcontext=unconfined_u:object_r:named_conf_t:s0 tclass=dir permissive=0
+
+	Was caused by:
+		Missing type enforcement (TE) allow rule.
+
+		You can use audit2allow to generate a loadable module to allow this access.
+
+[root@ns01 ~]#
+```
+
+В данном случае домен/контекст процесса named_t , а контекст объекта, к которому он пытается применить операцию write , - named_conf_t , класс объекта dir , название директории dynamic.
+
+Проверяем, какой домен имеет процесс named, какие контексты объектов вообще существют для named:
+
+```
+[vagrant@ns01 ~]$ ps -efZ | grep named | grep -v grep
+system_u:system_r:named_t:s0    named        719       1  0 16:35 ?        00:00:00 /usr/sbin/named -u named -c /etc/named.conf
+[vagrant@ns01 ~]$ 
+[root@ns01 ~]# sudo semanage fcontext -l | grep named
+<...>
+/etc/named(/.*)?                                   all files          system_u:object_r:named_conf_t:s0 
+/etc/named\.caching-nameserver\.conf               regular file       system_u:object_r:named_conf_t:s0 
+/etc/named\.conf                                   regular file       system_u:object_r:named_conf_t:s0 
+/etc/named\.rfc1912.zones                          regular file       system_u:object_r:named_conf_t:s0 
+/etc/named\.root\.hints                            regular file       system_u:object_r:named_conf_t:s0 
+/etc/rc\.d/init\.d/named                           regular file       system_u:object_r:named_initrc_exec_t:s0 
+/etc/rc\.d/init\.d/named-sdb                       regular file       system_u:object_r:named_initrc_exec_t:s0 
+/etc/rc\.d/init\.d/unbound                         regular file       system_u:object_r:named_initrc_exec_t:s0 
+/etc/rndc.*                                        regular file       system_u:object_r:named_conf_t:s0 
+/etc/unbound(/.*)?                                 all files          system_u:object_r:named_conf_t:s0 
+/usr/lib/systemd/system/named-sdb.*                regular file       system_u:object_r:named_unit_file_t:s0 
+/usr/lib/systemd/system/named.*                    regular file       system_u:object_r:named_unit_file_t:s0 
+/usr/lib/systemd/system/unbound.*                  regular file       system_u:object_r:named_unit_file_t:s0 
+/usr/lib/systemd/systemd-hostnamed                 regular file       system_u:object_r:systemd_hostnamed_exec_t:s0 
+/usr/sbin/lwresd                                   regular file       system_u:object_r:named_exec_t:s0 
+/usr/sbin/named                                    regular file       system_u:object_r:named_exec_t:s0 
+/usr/sbin/named-checkconf                          regular file       system_u:object_r:named_checkconf_exec_t:s0 
+/usr/sbin/named-pkcs11                             regular file       system_u:object_r:named_exec_t:s0 
+/usr/sbin/named-sdb                                regular file       system_u:object_r:named_exec_t:s0 
+/usr/sbin/unbound                                  regular file       system_u:object_r:named_exec_t:s0 
+/usr/sbin/unbound-anchor                           regular file       system_u:object_r:named_exec_t:s0 
+/usr/sbin/unbound-checkconf                        regular file       system_u:object_r:named_exec_t:s0 
+/usr/sbin/unbound-control                          regular file       system_u:object_r:named_exec_t:s0 
+/usr/share/munin/plugins/named                     regular file       system_u:object_r:services_munin_plugin_exec_t:s0 
+/var/lib/softhsm(/.*)?                             all files          system_u:object_r:named_cache_t:s0 
+/var/lib/unbound(/.*)?                             all files          system_u:object_r:named_cache_t:s0 
+/var/log/named.*                                   regular file       system_u:object_r:named_log_t:s0 
+/var/named(/.*)?                                   all files          system_u:object_r:named_zone_t:s0 
+/var/named/chroot(/.*)?                            all files          system_u:object_r:named_conf_t:s0 
+/var/named/chroot/dev                              directory          system_u:object_r:device_t:s0 
+/var/named/chroot/dev/log                          socket             system_u:object_r:devlog_t:s0 
+/var/named/chroot/dev/null                         character device   system_u:object_r:null_device_t:s0 
+/var/named/chroot/dev/random                       character device   system_u:object_r:random_device_t:s0 
+/var/named/chroot/dev/urandom                      character device   system_u:object_r:urandom_device_t:s0 
+/var/named/chroot/dev/zero                         character device   system_u:object_r:zero_device_t:s0 
+/var/named/chroot/etc(/.*)?                        all files          system_u:object_r:etc_t:s0 
+/var/named/chroot/etc/localtime                    regular file       system_u:object_r:locale_t:s0 
+/var/named/chroot/etc/named\.caching-nameserver\.conf regular file       system_u:object_r:named_conf_t:s0 
+/var/named/chroot/etc/named\.conf                  regular file       system_u:object_r:named_conf_t:s0 
+/var/named/chroot/etc/named\.rfc1912.zones         regular file       system_u:object_r:named_conf_t:s0 
+/var/named/chroot/etc/named\.root\.hints           regular file       system_u:object_r:named_conf_t:s0 
+/var/named/chroot/etc/pki(/.*)?                    all files          system_u:object_r:cert_t:s0 
+/var/named/chroot/etc/rndc\.key                    regular file       system_u:object_r:dnssec_t:s0 
+/var/named/chroot/lib(/.*)?                        all files          system_u:object_r:lib_t:s0 
+/var/named/chroot/proc(/.*)?                       all files          <<None>>
+/var/named/chroot/run/named.*                      all files          system_u:object_r:named_var_run_t:s0 
+/var/named/chroot/usr/lib(/.*)?                    all files          system_u:object_r:lib_t:s0 
+/var/named/chroot/var/log                          directory          system_u:object_r:var_log_t:s0 
+/var/named/chroot/var/log/named.*                  regular file       system_u:object_r:named_log_t:s0 
+/var/named/chroot/var/named(/.*)?                  all files          system_u:object_r:named_zone_t:s0 
+/var/named/chroot/var/named/data(/.*)?             all files          system_u:object_r:named_cache_t:s0 
+/var/named/chroot/var/named/dynamic(/.*)?          all files          system_u:object_r:named_cache_t:s0 
+/var/named/chroot/var/named/named\.ca              regular file       system_u:object_r:named_conf_t:s0 
+/var/named/chroot/var/named/slaves(/.*)?           all files          system_u:object_r:named_cache_t:s0 
+/var/named/chroot/var/run/dbus(/.*)?               all files          system_u:object_r:system_dbusd_var_run_t:s0 
+/var/named/chroot/var/run/named.*                  all files          system_u:object_r:named_var_run_t:s0 
+/var/named/chroot/var/tmp(/.*)?                    all files          system_u:object_r:named_cache_t:s0 
+/var/named/chroot_sdb/dev                          directory          system_u:object_r:device_t:s0 
+/var/named/chroot_sdb/dev/null                     character device   system_u:object_r:null_device_t:s0 
+/var/named/chroot_sdb/dev/random                   character device   system_u:object_r:random_device_t:s0 
+/var/named/chroot_sdb/dev/urandom                  character device   system_u:object_r:urandom_device_t:s0 
+/var/named/chroot_sdb/dev/zero                     character device   system_u:object_r:zero_device_t:s0 
+/var/named/data(/.*)?                              all files          system_u:object_r:named_cache_t:s0 
+/var/named/dynamic(/.*)?                           all files          system_u:object_r:named_cache_t:s0 
+/var/named/named\.ca                               regular file       system_u:object_r:named_conf_t:s0 
+/var/named/slaves(/.*)?                            all files          system_u:object_r:named_cache_t:s0 
+/var/run/bind(/.*)?                                all files          system_u:object_r:named_var_run_t:s0 
+/var/run/ecblp0                                    named pipe         system_u:object_r:cupsd_var_run_t:s0 
+/var/run/initctl                                   named pipe         system_u:object_r:initctl_t:s0 
+/var/run/named(/.*)?                               all files          system_u:object_r:named_var_run_t:s0 
+/var/run/ndc                                       socket             system_u:object_r:named_var_run_t:s0 
+/var/run/systemd/initctl/fifo                      named pipe         system_u:object_r:initctl_t:s0 
+/var/run/unbound(/.*)?                             all files          system_u:object_r:named_var_run_t:s0 
+/var/named/chroot/usr/lib64 = /usr/lib
+/var/named/chroot/lib64 = /usr/lib
+/var/named/chroot/var = /var
+[root@ns01 ~]# 
+```
+
+и какие действия разрешены разрешены домену named_t над объектами с контекстами named_conf_t , named_zone_t и named_cache_t , а также смотрим, какие контексты имеют директории и файлы в директориях /etc/named/ и /var/named/ :
+
+```
+[vagrant@ns01 ~]$ sesearch -A -s named_t -t named_zone_t
+allow domain file_type:blk_file map; [ domain_can_mmap_files ]:True
+allow domain file_type:chr_file map; [ domain_can_mmap_files ]:True
+allow domain file_type:file map; [ domain_can_mmap_files ]:True
+allow domain file_type:lnk_file map; [ domain_can_mmap_files ]:True
+allow named_t file_type:filesystem getattr;
+allow named_t named_zone_t:dir { add_name create link remove_name rename reparent rmdir setattr unlink watch watch_reads write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:dir { add_name remove_name write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:dir { add_name remove_name write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:dir { add_name remove_name write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:dir { getattr ioctl lock open read search };
+allow named_t named_zone_t:file { append create link rename setattr unlink watch watch_reads write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:file { getattr ioctl lock map open read };
+allow named_t named_zone_t:lnk_file { append create ioctl link lock rename setattr unlink watch watch_reads write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:lnk_file { getattr read };
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ sesearch -A -s named_t -t named_conf_t | grep write
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ sesearch -A -s named_t -t named_zone_t | grep write
+allow named_t named_zone_t:dir { add_name create link remove_name rename reparent rmdir setattr unlink watch watch_reads write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:dir { add_name remove_name write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:dir { add_name remove_name write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:dir { add_name remove_name write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:file { append create link rename setattr unlink watch watch_reads write }; [ named_write_master_zones ]:True
+allow named_t named_zone_t:lnk_file { append create ioctl link lock rename setattr unlink watch watch_reads write }; [ named_write_master_zones ]:True
+[vagrant@ns01 ~]$
+[vagrant@ns01 ~]$ sesearch -A -s named_t -t named_cache_t | grep write
+allow named_t named_cache_t:dir { add_name create getattr ioctl link lock open read remove_name rename reparent rmdir search setattr unlink watch watch_reads write };
+allow named_t named_cache_t:file { append create getattr ioctl link lock map open read rename setattr unlink watch watch_reads write };
+allow named_t named_cache_t:lnk_file { append create getattr ioctl link lock read rename setattr unlink watch watch_reads write };
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ sesearch -A -s named_t -t named_conf_t | grep write
+[vagrant@ns01 ~]$
+vagrant@ns01 ~]$ sudo ls -alZ /etc/named/
+total 28
+drw-rwx---.  3 root named system_u:object_r:named_conf_t:s0      121 Sep 11 14:39 .
+drwxr-xr-x. 89 root root  system_u:object_r:etc_t:s0            8192 Sep 11 16:35 ..
+drw-rwx---.  2 root named unconfined_u:object_r:named_conf_t:s0   88 Sep 11 15:37 dynamic
+-rw-rw----.  1 root named system_u:object_r:named_conf_t:s0      784 Sep 11 14:39 named.50.168.192.rev
+-rw-rw----.  1 root named system_u:object_r:named_conf_t:s0      610 Sep 11 14:39 named.dns.lab
+-rw-rw----.  1 root named system_u:object_r:named_conf_t:s0      609 Sep 11 14:39 named.dns.lab.view1
+-rw-rw----.  1 root named system_u:object_r:named_conf_t:s0      657 Sep 11 14:39 named.newdns.lab
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ sudo ls -alZ /etc/named/dynamic
+total 12
+drw-rwx---. 2 root  named unconfined_u:object_r:named_conf_t:s0  88 Sep 11 15:37 .
+drw-rwx---. 3 root  named system_u:object_r:named_conf_t:s0     121 Sep 11 14:39 ..
+-rw-rw----. 1 named named system_u:object_r:named_conf_t:s0     509 Sep 11 14:39 named.ddns.lab
+-rw-r--r--. 1 named named system_u:object_r:named_conf_t:s0     348 Sep 11 15:37 named.ddns.lab.view1
+-rw-r--r--. 1 named named system_u:object_r:named_conf_t:s0     704 Sep 11 15:24 named.ddns.lab.view1.jnl
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ sudo ls -alZ /var/named/
+total 20
+drwxrwx--T.  5 root  named system_u:object_r:named_zone_t:s0   127 Sep 11 16:35 .
+drwxr-xr-x. 20 root  root  system_u:object_r:var_t:s0         4096 Sep 11 14:39 ..
+drwxrwx---.  2 named named system_u:object_r:named_cache_t:s0   23 Sep 11 14:39 data
+drwxrwx---.  2 named named system_u:object_r:named_cache_t:s0   94 Sep 11 16:36 dynamic
+-rw-r-----.  1 root  named system_u:object_r:named_conf_t:s0  2112 Aug 13 11:27 named.ca
+-rw-r-----.  1 root  named system_u:object_r:named_zone_t:s0   152 Aug 13 11:27 named.empty
+-rw-r-----.  1 root  named system_u:object_r:named_zone_t:s0   152 Aug 13 11:27 named.localhost
+-rw-r-----.  1 root  named system_u:object_r:named_zone_t:s0   168 Aug 13 11:27 named.loopback
+drwxrwx---.  2 named named system_u:object_r:named_cache_t:s0    6 Aug 13 11:36 slaves
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ sudo ls -alZ /var/named/dynamic
+total 16
+drwxrwx---. 2 named named system_u:object_r:named_cache_t:s0   94 Sep 11 16:36 .
+drwxrwx--T. 5 root  named system_u:object_r:named_zone_t:s0   127 Sep 11 16:35 ..
+-rw-r--r--. 1 named named system_u:object_r:named_cache_t:s0 1421 Sep 11 16:36 default.mkeys
+-rw-r--r--. 1 named named system_u:object_r:named_cache_t:s0 2590 Sep 11 16:35 default.mkeys.jnl
+-rw-r--r--. 1 named named system_u:object_r:named_cache_t:s0 1421 Sep 11 16:36 view1.mkeys
+-rw-r--r--. 1 named named system_u:object_r:named_cache_t:s0 2590 Sep 11 16:35 view1.mkeys.jnl
+[vagrant@ns01 ~]$ 
+```
+
+Из вывода видно, что процесс запущенный процесс named с доменом named_t не может выполнять операции write/записи над объектами с контекстом named_conf_t , но может выполнять операции записи над объектами с контекстом named_zone_t. При этом директория /etc/named/ и все объекты внутри неё имеют контекст named_conf_t (то есть процесс named с доменом named_t может из них только читать, а писать в них не может - отсюда и возникающая ошибка доступа SELinux) - в директории /etc/named/ лежат конфигурации named, которые сам процесс изменять не должен. А дирктория /var/named/ содержит файлы описания статических и динамических зон, которые процесс named может не только читать, но и записывать при получении изменений, поэтому сама директория /var/named/ имеет контекст named_zone_t, а файлы и директории в ней имеют контексты named_zone_t либо named_cache_t (для этих контекстов домен named_t может применять операцию записи).
+
+Проблема в том, что файлы описания статических и динамических зон находятся в дериктории /etc/named/ (где должны находитсья толькл конфигурации самого named), а не в директории /var/named - где они должны находитсья при правильной конфигурации.
+
+Для временного рещения проблемы пробуем изменить контекст директории /etc/named/ и объектов в ней на named_zone_t :
+
+```
+[root@ns01 ~]# chcon -R -t named_zone_t /etc/named
+[root@ns01 ~]#
+[root@ns01 ~]# ls -alZ /etc/named
+total 28
+drw-rwx---.  3 root named system_u:object_r:named_zone_t:s0      121 Sep 11 14:39 .
+drwxr-xr-x. 89 root root  system_u:object_r:etc_t:s0            8192 Sep 11 16:35 ..
+drw-rwx---.  2 root named unconfined_u:object_r:named_zone_t:s0   88 Sep 11 15:37 dynamic
+-rw-rw----.  1 root named system_u:object_r:named_zone_t:s0      784 Sep 11 14:39 named.50.168.192.rev
+-rw-rw----.  1 root named system_u:object_r:named_zone_t:s0      610 Sep 11 14:39 named.dns.lab
+-rw-rw----.  1 root named system_u:object_r:named_zone_t:s0      609 Sep 11 14:39 named.dns.lab.view1
+-rw-rw----.  1 root named system_u:object_r:named_zone_t:s0      657 Sep 11 14:39 named.newdns.lab
+[root@ns01 ~]# 
+```
+
+После этого изменения контекста на ns01 повторно пробуем на ВМ client внести изменения в зону:
+
+```
+[root@client ~]# nsupdate -k /etc/named.zonetransfer.key
+> server 192.168.50.10
+> zone ddns.lab
+> update add www.ddns.lab. 60 A 192.168.50.15
+> send
+> quit
+[root@client ~]# 
+[root@client ~]# dig www.ddns.lab
+
+; <<>> DiG 9.16.23-RH <<>> www.ddns.lab
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 50138
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+; COOKIE: 11181d386ec2ffd8010000006aa41d6300d184df9fdad054 (good)
+;; QUESTION SECTION:
+;www.ddns.lab.			IN	A
+
+;; ANSWER SECTION:
+www.ddns.lab.		60	IN	A	192.168.50.15
+
+;; Query time: 3 msec
+;; SERVER: 192.168.50.10#53(192.168.50.10)
+;; WHEN: Fri Sep 11 15:25:23 UTC 2026
+;; MSG SIZE  rcvd: 85
+
+[root@client ~]# 
+[root@client ~]# # Делаем reboot сервера ns01 - после ребута ns01 повторной командой проверяем, что внесённые изменения не потерялись
+[root@client ~]# 
+[root@client ~]# dig www.ddns.lab
+
+; <<>> DiG 9.16.23-RH <<>> www.ddns.lab
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 46139
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+; COOKIE: ef37a178d4948c14010000006aa42e34f1e00e0833390bf8 (good)
+;; QUESTION SECTION:
+;www.ddns.lab.			IN	A
+
+;; ANSWER SECTION:
+www.ddns.lab.		60	IN	A	192.168.50.15
+
+;; Query time: 5 msec
+;; SERVER: 192.168.50.10#53(192.168.50.10)
+;; WHEN: Fri Sep 11 16:37:08 UTC 2026
+;; MSG SIZE  rcvd: 85
+
+[root@client ~]# 
+```
+
+Важно, что мы не добавили новые правила в политику для назначения этого контекста в каталоге. Значит, что при перемаркировке файлов контекст вернётся на тот, который прописан в файле политики.
+Для того, чтобы вернуть правила обратно, можно ввести команду: restorecon -v -R /etc/named - после этого изменения в зону опять не будут сохраняться:
+
+```
+[vagrant@ns01 ~]$ sudo restorecon -v -R /etc/named
+Relabeled /etc/named from system_u:object_r:named_zone_t:s0 to system_u:object_r:named_conf_t:s0
+Relabeled /etc/named/named.dns.lab.view1 from system_u:object_r:named_zone_t:s0 to system_u:object_r:named_conf_t:s0
+Relabeled /etc/named/named.dns.lab from system_u:object_r:named_zone_t:s0 to system_u:object_r:named_conf_t:s0
+Relabeled /etc/named/dynamic from unconfined_u:object_r:named_zone_t:s0 to unconfined_u:object_r:named_conf_t:s0
+Relabeled /etc/named/dynamic/named.ddns.lab from system_u:object_r:named_zone_t:s0 to system_u:object_r:named_conf_t:s0
+Relabeled /etc/named/dynamic/named.ddns.lab.view1 from system_u:object_r:named_zone_t:s0 to system_u:object_r:named_conf_t:s0
+Relabeled /etc/named/dynamic/named.ddns.lab.view1.jnl from system_u:object_r:named_zone_t:s0 to system_u:object_r:named_conf_t:s0
+Relabeled /etc/named/named.newdns.lab from system_u:object_r:named_zone_t:s0 to system_u:object_r:named_conf_t:s0
+Relabeled /etc/named/named.50.168.192.rev from system_u:object_r:named_zone_t:s0 to system_u:object_r:named_conf_t:s0
+[vagrant@ns01 ~]$ 
+
+[root@client ~]# # После сброса контекста на ns01 на первоначальный
+[root@client ~]# 
+[root@client ~]# nsupdate -k /etc/named.zonetransfer.key
+> server 192.168.50.15
+> server 192.168.50.10
+> zone ddns.lab
+> update add www.ddns.lab. 60 A 192.168.50.16
+> send
+update failed: SERVFAIL
+> quit
+[root@client ~]# 
+```
+
+В лабе использовалась команда chcon — это временное изменение, которое restorecon или relabel затрут. Чтобы закрепить навсегда, нужно добавить правило в базу semanage fcontext. Если бы мы хотели закрепить сделанные изменения в политиках SELinux, то следовало бы ввести следующие команды:
+
+```
+sudo semanage fcontext -a -t named_zone_t "/etc/named(/.*)?" # Команда вносит постоянное правило в политики fcontext 
+
+sudo restorecon -Rv /etc/named/  # Применяет правило к существующим файлам
+
+sudo semanage fcontext -l | grep "/etc/named"   # Проверка, что правило закрепилось
+/etc/named(/.*)?    all files    system_u:object_r:named_zone_t:s0
+
+sudo semanage fcontext -d "/etc/named(/.*)?"  # Если нужно откатить обратно и удалить сделанное правило
+sudo restorecon -Rv /etc/named/
+```
+
+Таким образом, для решания проблемы с невозможностью внесения изменений в динамичекие зоны DNS можно применить три возможных решения:
+
+1. Изменить контекст директории /etc/named и объектов внутри неё с named_conf_t на named_zone_t , чтобы процесс named с доменом name_t мог производить запись в эту директорию и файлы в ней - данный метод использован в лабораторной работе выше. С точки зрения безопасности данный метод открывает уязвимость, так как предоставляет потенциальную возможность процессу named изменять все файлы в директории /etc/named , включчая собственные конфигурации;
+
+2. Перенести файлы описание статических и динамических зон в директорию /var/named с соответствующим изменением в файле конфигурации . Файлы зон при правильной конфигурации named должны лежать в директориях /var/named/ для статических зон, /var/named/dynamic/ для динамических (DDNS):
+
+```
+[root@ns01 ~]# cat /etc/named.conf | grep "zone \| file "
+    zone "." IN {
+    zone "dns.lab" {
+        file "/мфк/named/named.dns.lab.view1";   # в исходном файле было /etc/named/named.dns.lab.view1
+    zone "ddns.lab" {
+        file "/var/named/dynamic/named.ddns.lab.view1";   # в исходном файле было /etc/named/dynamic/named.ddns.lab.view1
+    zone "newdns.lab" {
+        file "/var/named/named.newdns.lab";   # в исходном файле было /etc/named/named.newdns.lab
+    // labs zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        file "/var/named/named.50.168.192.rev";   # исходном файле было /etc/named/named.50.168.192.rev
+    zone "." IN {
+    zone "dns.lab" {
+        file "/var/named/named.dns.lab";   # исходном файле было /etc/named/named.dns.lab
+    zone "ddns.lab" {
+        file "/var/named/dynamic/named.ddns.lab";   # исходном файле было /etc/named/dynamic/named.ddns.lab
+    zone "newdns.lab" {
+        file "/var/named/named.newdns.lab";   # исходном файле было /etc/named/named.newdns.lab
+    // labs zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        file "/var/named/named.50.168.192.rev";   # исходном файле было /etc/named/named.50.168.192.rev
+[root@ns01 ~]# 
+```
+
+3. Также можно изменить контекст и разрешить запись только в подкаталог dynamic (где .jnl и динамические зоны), а на остальные файлы в /etc/named вернуть named_conf_t :
+
+```
+# Основные конфиги — только чтение
+sudo semanage fcontext -a -t named_conf_t "/etc/named(/.*)?"
+# Но подкаталог dynamic — запись разрешена
+sudo semanage fcontext -a -t named_zone_t "/etc/named/dynamic(/.*)?"
+
+sudo restorecon -Rv /etc/named/
+```
+
+Правила применяются по принципу «самое конкретное выигрывает»: для /etc/named/dynamic/ сработает правило named_zone_t, для всего остального — named_conf_t.
+
+При таком подходе named может писать только туда, где это действительно нужно (динамически обновляемые зоны), а конфиги и статические зоны остаются read-only.
+
+
+
+# КОНЕЦ
+
+### Ниже также приводится справочная общая информация о построении и работе с SELinux (к лабораторной работе непосредственного отношения не имеет):
+
+Q: А есть приёмы, позволяющие удобно работать с SELinux (просмотреть все контексты, все контексты процессов, все контексты файловых объектов, правила доступа к файловым объектам, права доступа процессов). Ну так, чтобы боль от работы с SELinux не была такой сильной, что большинство рекомендаций сразу рекомендует этот SELinux отключать
+
+A: SELinux — это не враг, а инструмент. Боль возникает от непонимания, что именно он блокирует и почему. Вот набор приёмов, которые делают работу с ним предсказуемой.
+
+Быстрая диагностика: что SELinux блокирует прямо сейчас
+
+Самый полезный навык — читать логи аудита:
+
+```
+# Все блокировки SELinux за последние 30 минут
+sudo ausearch -m AVC,USER_AVC -ts recent
+
+# Или через journalctl
+sudo journalctl -t setroubleshoot --since "1 hour ago"
+```
+
+Если setroubleshoot не установлен — поставите, он даёт человекочитаемые объяснения:
+
+```
+sudo dnf install setroubleshoot setroubleshoot-server
+sudo systemctl enable --now setroubleshootd
+```
+
+После этого при блокировке в логе появится не просто denied, а пояснение: «процесс X пытался сделать Y с файлом Z, вот как это исправить».
+
+
+### Просмотр контекстов
+
+Контексты файлов
+
+```
+# Контекст одного файла или директории
+ls -Z /var/www/html
+
+# Контексты всех файлов в директории (рекурсивно)
+ls -dZ /var/www/html/*
+
+# Найти файлы с конкретным контекстом
+find / -context "*httpd_sys_content_t*" 2>/dev/null
+```
+
+### Контексты процессов
+
+```
+# Контекст текущего процесса
+ps -eZ | grep $$
+id -Z
+
+# Все процессы с контекстами
+ps -eZ
+
+# Контекст конкретного процесса
+ps -Z -p $(pidof nginx)
+```
+
+В выводе ps -eZ первая колонка — это контекст: user:role:type:mls. Чаще всего важна только третья часть — тип (например, httpd_t).
+
+### Все типы в системе
+
+```
+seinfo -t | less
+```
+
+### Все роли
+
+```
+seinfo -r
+```
+
+### Все пользователи SELinux (не путать с системными)
+
+```
+seinfo -u
+```
+
+### Правила доступа: кто куда может
+
+Какие правила действуют для конкретного типа
+
+```
+# Что тип httpd_t может делать
+sesearch -A -s httpd_t
+
+# Что тип httpd_t может делать с файлами типа httpd_sys_content_t
+sesearch -A -s httpd_t -t httpd_sys_content_t
+
+# Все блокировки (deny) для процесса
+sesearch -D -s httpd_t
+```
+
+### Разрешения между доменами (переходы)
+
+```
+# Какие домены могут переходить в httpd_t
+sesearch -T -t httpd_t
+
+# Куда может перейти httpd_t
+sesearch -T -s httpd_t
+```
+
+sesearch и seinfo — из пакета setools-console:
+
+```
+sudo dnf install setools-console
+```
+
+### Булеаны — переключатели политики
+
+Булеаны — это флаги, включающие/выключающие целые группы правил без переписывания политики:
+
+```
+# Все булеаны и их состояние
+getsebool -a
+
+# Найти нужный
+getsebool -a | grep -i httpd
+
+# Включить
+sudo setsebool -P httpd_enable_homedirs on
+
+# Выключить
+sudo setsebool -P httpd_can_network_connect off
+
+-P — сохранить между перезагрузками. Без -P — временно до ребута.
+
+## Полный список с описанием:
+semanage boolean -l
+```
+
+### Работа с контекстами файлов
+
+Посмотреть, какой контекст ДОЛЖЕН быть у пути
+
+```
+matchpathcon /var/www/html/index.html
+```
+
+Сравните с реальным ls -Z — если не совпадает, значит контекст сбит.
+
+Исправить контекст по умолчанию
+
+```
+# Один файл
+sudo restorecon -v /var/www/html/index.html
+
+# Рекурсивно
+sudo restorecon -Rv /var/www/html/
+```
+
+Задать контекст по умолчанию для своего пути
+
+```
+# Добавить правило: файлы в /myapp/ получают тип httpd_sys_content_t
+sudo semanage fcontext -a -t httpd_sys_content_t "/myapp(/.*)?"
+
+# Применить
+sudo restorecon -Rv /myapp/
+```
+
+Посмотреть все кастомные правила контекстов
+
+```
+semanage fcontext -l | grep -v "^<<"
+```
+
+Удалить кастомное правило
+
+```
+sudo semanage fcontext -d "/myapp(/.*)?"
+```
+
+### Практический сценарий: что делать при блокировке
+
+Допустим, Nginx не читает файл, и вы подозреваете SELinux.
+
+```
+# 1. Проверить режим (Enforcing / Permissive / Disabled)
+getenforce
+
+# 2. Посмотреть, что заблокировано
+sudo ausearch -m AVC -ts recent | grep nginx
+
+# 3. Проверить контекст файла
+ls -Z /path/to/file
+
+# 4. Проверить, какой контекст должен быть
+matchpathcon /path/to/file
+
+# 5. Исправить
+sudo restorecon -v /path/to/file
+
+# 6. Если нужного правила нет — создать модуль из логов аудита
+```
+
+### Автоматическое создание модуля из логов аудита
+
+Если блокировка legit и нужно разрешить, не трогая остальную политику:
+
+```
+# 1. Создать модуль из логов
+sudo ausearch -m AVC -ts recent | audit2allow -M mynginx
+
+# 2. Посмотреть, что он делает
+cat mynginx.te
+
+# 3. Установить
+sudo semodule -i mynginx.pp
+
+# 4. Удалить, если ошиблись
+sudo semodule -r mynginx
+```
+
+audit2allow превращает deny-логи в готовое правило-исключение. Это безопаснее, чем отключать SELinux — вы разрешаете ровно то, что нужно.
+
+### Режимы SELinux — мягкая посадка
+
+Переключить в Permissive (логирует, но не блокирует)
+
+```
+sudo setenforce 0
+```
+
+В этом режиме SELinux пишет в лог все блокировки, но не применяет их. Идеально для отладки: запускаете приложение, смотрите, что он бы заблокировал, и создаёте правила через audit2allow.
+
+Вернуть обратно:
+
+```
+sudo setenforce 1
+```
+
+Постоянно (переживает ребут)
+
+```
+sudo nano /etc/selinux/config
+# SELINUX=permissive   — логирует, не блокирует
+# SELINUX=enforcing    — блокирует (нормальный режим)
+# SELINUX=disabled     — выключен (НЕ рекомендую)
+```
+
+### Permissive для одного процесса, а не всей системы
+
+Можно оставить Enforcing глобально, но перевести в Permissive конкретный домен — например, только httpd:
+
+```
+sudo semanage permissive -a httpd_t
+```
+
+Вернуть:
+
+```
+sudo semanage permissive -d httpd_t
+```
+
+Это гораздо безопаснее: остальная система защищена, а проблемный сервис временно не блокируется, но логирует.
+### Шпаргалка по ежедневным командам
+
+| Что нужно	| Команда |
+|:---------------|:-------------------------------------------|
+|Режим SELinux	|getenforce |
+|Блокировки	 |sudo ausearch -m AVC -ts recent |
+|Контекст файла	 |ls -Z /path |
+|Контекст процесса	| ps -eZ  grep nginx |
+|Какой контекст должен быть	|matchpathcon /path |
+| Исправить контекст	|sudo restorecon -Rv /path |
+|Булеаны	| getsebool -a |
+|Включить булеан	|sudo setsebool -P name on|
+|Задать контекст пути	|sudo semanage fcontext -a -t type "/path(/.*)?" |
+| Кастомные контексты	|semanage fcontext -l |
+Что тип X может делать	sesearch -A -s httpd_t
+| Создать модуль из логов	|sudo ausearch -m AVC  audit2allow -M mymod |
+|Установить модуль	| sudo semodule -i mymod.pp |
+| Список модулей	|sudo semodule -l |
+| Перевести домен в Permissive	|sudo semanage permissive -a httpd_t |
+
+### Ключевой принцип
+
+Алгоритм работы с SELinux всегда один и тот же:
+
+    Что заблокировано? → ausearch
+	
+    Кто и к чему обращается? → ps -Z, ls -Z
+	
+    Контекст правильный? → matchpathcon + restorecon
+	
+    Нужен булеан? → getsebool -a | grep ...
+	
+    Нужно своё правило? → audit2allow + semodule -i
+	
+    Временно не блокировать? → semanage permissive -a <type>
+
+Если пройти этот путь, SELinux из врага превращается в инструмент: вы точно знаете, что разрешили и почему. Отключение SELinux — это как снять замок с двери, потому что ключ не подходит. Лучше сделать новый ключ.
+
+Q: Спасибо. Но непонимае работы связано ещё и со сложной структурой SELinux, Дай пожалуйста ещё краткое описание общей структуры (домены, контекста,  как они соотносятся с правами процессов, файловыми объектами и проч.).
+
+A: SELinux: как это устроено
+
+### Главная идея
+
+Обычные права Linux (rwx, владелец, группа) — это дискреционное управление (DAC): владелец файла сам решает, кто может его читать. SELinux — это мандатное управление (MAC): система независимо от DAC решает, может ли процесс вообще трогать файл, независимо от того, какой у него UID.
+
+Оба механизма работают одновременно. Чтобы процесс получил доступ, он должен пройти обе проверки: сначала DAC (обычные права), потом MAC (SELinux). Если SELinux сказал «нет» — доступ запрещён, даже если процесс — root.
+
+### Контекст
+
+Контекст — это «ярлык», который висит на каждом процессе и каждом файле. Он состоит из четырёх частей:
+
+```
+user : role : type : mls
+```
+
+| Часть	| Что это	|Пример |
+|:-----|:----------------------------------------------|:------------------------|
+|user	|SELinux-пользователь (не системный!)	|unconfined_u, system_u |
+| role	|Роль — связующее звено между пользователем и типом	|object_r, system_r |
+| type	|Самая важная часть. Тип (домен) — сущность, к которой применяются правила	|httpd_t, httpd_sys_content_t |
+|mls	|Уровень секретности (Multi-Level Security)	|s0 |
+
+На практике 95% работы с SELinux — это работа с третьим полем, типом.
+
+### Тип (он же домен) — для процессов
+
+Когда процесс запущен, его контекст выглядит так:
+
+```
+system_u:system_r:httpd_t:s0
+```
+
+Здесь httpd_t — это домен процесса. Домен определяет, что процесс может и не может делать. Все правила SELinux — это, по сути, «домен X может трогать тип Y с правом Z».
+
+```
+system_u:system_r:httpd_t:s0    → процесс nginx (домен httpd_t)
+```
+
+### Тип — для файлов
+
+Файлы тоже имеют контекст:
+
+```
+system_u:object_r:httpd_sys_content_t:s0
+```
+
+Здесь httpd_sys_content_t — это тип файла. Файлы не «выполняются», у них нет домена — у них просто есть тип, который определяет, какие домены-процессы могут к ним обращаться.
+
+### Как это соотносится: правила доступа
+
+Правило SELinux — это тройка «кто → что → к чему»:
+
+```
+allow httpd_t httpd_sys_content_t : file { read getattr open } ;
+```
+
+Читается так: процесс домена httpd_t может читать (read) файлы типа httpd_sys_content_t.
+
+    httpd_t — источник (домен процесса, source)
+	
+    httpd_sys_content_t — цель (тип файла, target)
+	
+    file — класс объекта (файл, сокет, каталог...)
+	
+    read getattr open — разрешения
+
+Если такого правила нет — доступ запрещён. Даже если DAC разрешает. Даже если процесс — root.
+
+### Полная картина
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     СИСТЕМА                              │
+│                                                          │
+│  Процесс nginx          Файл index.html                  │
+│  ┌──────────────┐       ┌──────────────────────┐         │
+│  │ Контекст:      │       │ Контекст:              │         │
+│  │ httpd_t        │       │ httpd_sys_content_t  │         │
+│  │ (домен)        │       │ (тип файла)           │         │
+│  └──────┬───────┘       └──────────┬───────────┘         │
+│         │                          │                     │
+│         │    DAC: rwxr--r--         │                     │
+│         │    (обычные права)        │                     │
+│         ├──────────────────────────→│                     │
+│         │    ✅ Разрешено            │                     │
+│         │                          │                     │
+│         │    MAC: allow httpd_t     │                     │
+│         │    httpd_sys_content_t    │                     │
+│         │    : file { read }        │                     │
+│         ├──────────────────────────→│                     │
+│         │    ✅ Разрешено            │                     │
+│         │                          │                     │
+│         │    → Доступ разрешён      │                     │
+│                                                          │
+│  Процесс nginx          Файл /etc/shadow                │
+│  ┌──────────────┐       ┌──────────────────────┐         │
+│  │ Контекст:      │       │ Контекст:              │         │
+│  │ httpd_t        │       │ shadow_t              │         │
+│  └──────┬───────┘       └──────────┬───────────┘         │
+│         │                          │                     │
+│         │    DAC: r--------         │                     │
+│         │    (nginx от root)        │                     │
+│         ├──────────────────────────→│                     │
+│         │    ✅ Разрешено            │                     │
+│         │                          │                     │
+│         │    MAC: allow httpd_t     │                     │
+│         │    shadow_t : file        │                     │
+│         │    → правила НЕТ          │                     │
+│         ├─────────────✗────────────→│                     │
+│         │    ❌ Запрещено            │                     │
+│         │                          │                     │
+│         │    → Доступ запрещён      │                     │
+│         │      (несмотря на DAC)    │                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Роль пользователей
+
+SELinux-пользователь — это не системный пользователь (ivan, root). Это мета-пользователь, который определяет, какие роли и типы доступны:
+
+```
+Системный пользователь ivan
+    ↓
+SELinux-пользователь user_u
+    ↓
+Роль user_r
+    ↓
+Домен user_t
+```
+
+Большинство обычных пользователей работают как unconfined_u — без ограничений. Системные процессы — как system_u.
+
+### Роль роли
+
+Роль — это мост между пользователем и типом:
+
+    Пользователь привязан к ролям
+	
+    Роль привязана к типам (доменам)
+	
+    Поэтому пользователь может «быть» только в тех доменах, которые разрешены его ролям
+
+Для файлов роль всегда object_r — она не имеет смысла, но обязательна по формату.
+
+### Переходы (transitions) — как процесс получает домен
+
+Когда вы запускаете /usr/sbin/nginx, происходит переход типа:
+
+    Процесс init (домен init_t) выполняет /usr/sbin/nginx
+	
+    SELinux видит: файл /usr/sbin/nginx имеет контекст с типом httpd_exec_t
+	
+    Правило говорит: «при выполнении файла типа httpd_exec_t перейти в домен httpd_t»
+	
+    Процесс nginx получает домен httpd_t
+
+```
+init_t  ──exec──>  httpd_exec_t  ──transition──>  httpd_t
+(родитель)         (файл)                      (новый домен)
+```
+
+Это ключевая магия SELinux: домен процесса определяется не тем, кто его запустил, а контекстом исполняемого файла. Поэтому даже если root запускает nginx — nginx всё равно получит домен httpd_t, а не unconfined_t.
+
+### Классы объектов
+
+SELinux различает не только файлы, но и классы объектов:
+
+|Класс	|Что это	| Пример разрешений |
+|:-----|:------------------------|:-----------------------------------|
+|file	|Обычные файлы и каталоги	|read, write, open, create, unlink|
+|dir	|Директории	|add_name, remove_name, search, rmdir|
+|socket	|Сокеты	|bind, connect, listen, accept|
+|tcp_socket	|TCP-сокеты	|connect, sendto, recvfrom|
+|process	|Процессы	|transition, fork, signal, ptrace|
+|capability	|Капабилити (capabilities)	|net_bind_service, sys_admin |
+
+### Булеаны — быстрые переключатели
+
+Булеаны — это предопределённые условия в правилах:
+
+```
+# Правило:
+allow httpd_t httpd_port_t:tcp_socket name_bind;
+# С булеаном:
+allow httpd_t httpd_port_t:tcp_socket name_bind;
+if (httpd_can_network_connect) { ... }
+```
+
+Включили httpd_can_network_connect — целая группа правил активировалась. Выключили — деактивировалась. Не нужно писать модули, достаточно одного setsebool.
+
+### Unconfined — «без домена»
+
+Большинство пользовательских процессов работают в домене unconfined_t. Для этого домена разрешено всё — SELinux их не ограничивает. Ограничиваются только системные сервисы: httpd_t, named_t, ntpd_t и т.д.
+
+Это разумный компромисс: обычный пользователь не страдает от SELinux, а взломанный сервис (nginx, bind) не может навредить системе, даже если его скомпрометировали.
+
+### Шпаргалка по структуре
+
+```
+ПОЛИТИКА SELinux
+├── Пользователи (SELinux)     user_u, system_u, unconfined_u
+│   └── Роли                   system_r, object_r, unconfined_r
+│       └── Типы/Домены         httpd_t, httpd_sys_content_t
+│           └── Правила (allow)  allow httpd_t httpd_sys_content_t:file read;
+│               ├── Источник    httpd_t (домен процесса)
+│               ├── Цель        httpd_sys_content_t (тип объекта)
+│               ├── Класс       file (класс объекта)
+│               └── Разрешения  read, write, open...
+├── Булеаны                    on/off переключатели групп правил
+├── Переходы (transition)      exec файла → домен процесса
+└── Модули                     кастомные правила (audit2allow)
+```
+
+Если свести к одному предложению: каждый процесс имеет домен, каждый файл имеет тип, и правила говорят, какой домен может что делать с каким типом — а всё остальное запрещено по умолчанию.
+
+Q: Узнать, что именно делает булеан, можно прямо в системе — без отрыва от терминала. Есть три уровня: от краткого описания до полных правил.
+
+### Уровень 1. Краткое описание
+
+```
+# Описание конкретного булеана
+semanage boolean -l | grep httpd_can_network_connect
+```
+
+Вывод:
+
+```
+httpd_can_network_connect  (off  ,  off)  Allow httpd to can network connect
+```
+
+Здесь:
+
+    (off, off) — текущее состояние и состояние по умолчанию
+    Текст — краткое описание
+
+Все булеаны с описаниями:
+
+```
+semanage boolean -l
+```
+
+Это удобно для общего понимания, но описание часто слишком общее — «Allow httpd to can network connect» не говорит, какие именно правила включаются.
+
+### Уровень 2. Какие правила скрываются за булеаном
+
+Это главный инструмент — sesearch с флагом -b:
+
+```
+# Все правила, которые управляются булеаном httpd_can_network_connect
+sesearch -b httpd_can_network_connect -A
+```
+
+Вывод покажет конкретные allow-правила:
+
+```
+allow httpd_t port_t : tcp_socket name_connect ; [ httpd_can_network_connect ]:True
+allow httpd_t http_port_t : tcp_socket name_connect ; [ httpd_can_network_connect ]:True
+```
+
+Здесь [ httpd_can_network_connect ]:True означает: это правило активно, когда булеан включён. Если выключен — правило не действует.
+
+Только заблокированные (deny) правила
+
+```
+sesearch -b httpd_can_network_connect -D
+```
+
+Покажет, какие запреты снимаются при включении булеана.
+
+Полный вывод с классами и разрешениями
+
+```
+sesearch -b httpd_can_network_connect -A -d
+```
+
+Флаг -d показывает детали: классы объектов и конкретные разрешения.
+
+### Уровень 3. Исходник политики
+
+Если хочется увидеть прямо в исходном коде политики:
+
+```
+# Найти булеан в исходниках политики
+grep -r "httpd_can_network_connect" /usr/share/selinux/devel/ 2>/dev/null
+
+# Или в установленных модулях
+sudo semodule -l | grep httpd
+```
+
+Для этого нужны пакеты с исходниками политики:
+
+```
+sudo dnf install selinux-policy-devel
+```
+
+После установки в /usr/share/selinux/devel/ появятся .if и .fc файлы, в которых можно grep'ом найти, как булеан используется:
+
+```
+grep -rn "httpd_can_network_connect" /usr/share/selinux/devel/
+```
+
+### Практический пример: разбираем булеан
+
+Допустим, Nginx не может подключиться к базе данных по сети. Проверяем:
+
+```
+# 1. Что говорит описание
+semanage boolean -l | grep httpd_can_network_connect
+
+# 2. Какие правила включает
+sesearch -b httpd_can_network_connect -A
+
+# 3. Какой контекст у порта БД
+semanage port -l | grep 5432
+
+# 4. Подходит ли правило под наш случай
+sesearch -b httpd_can_network_connect -A | grep postgresql_port_t
+```
+
+Если в выводе есть строка с postgresql_port_t — значит, включение булеана разрешит Nginx подключаться к PostgreSQL. Включаем:
+
+```
+sudo setsebool -P httpd_can_network_connect on
+```
+
+### Шпаргалка
+
+|Что нужно	|Команда |
+|:--------------------------------|:-------------------------------|
+|Список всех булеанов с описанием	|semanage boolean -l |
+|Описание одного	|semanage boolean -l  grep имя |
+|Состояние одного	| getsebool имя |
+|Все правила, управляемые булеаном	|sesearch -b имя -A |
+|Запреты, снимаемые булеаном	|sesearch -b имя -D |
+|Детальные правила с классами	|sesearch -b имя -A -d |
+|Исходник в политике	|grep -r "имя" /usr/share/selinux/devel/ |
+|Включить постоянно	|sudo setsebool -P имя on |
+|Включить временно	|sudo setsebool имя on |
+
+Итого: semanage boolean -l даёт человекочитаемое описание, а sesearch -b показывает конкретные правила, которые булеан включает или выключает. Этой пары достаточно, чтобы понять, что именно произойдёт при переключении — без чтения документации.
+
+Q: Булеаны, домены, контексты и прочие объекты SELinux можно создавать самостоятельно при необходимости, а также изменять при необходимости ?
+
+A: Да, всё это можно создавать и менять самостоятельно. SELinux — это не монолит, а набор модулей, которые можно добавлять, изменять и удалять. Вот что именно можно делать с каждым типом объекта.
+
+### Контексты файлов
+
+Изменить контекст одного файла (временно, до ребута)
+
+```
+sudo chcon -t httpd_sys_content_t /var/www/html/index.html
+sudo chcon -Rt httpd_sys_content_t /var/www/html/
+```
+
+После restorecon или перезагрузки контекст вернётся к стандартному.
+
+Задать контекст постоянно (правило для пути)
+
+```
+# Добавить правило: файлы в /myapp/ получают тип myapp_content_t
+sudo semanage fcontext -a -t httpd_sys_content_t "/myapp(/.*)?"
+
+# Применить
+sudo restorecon -Rv /myapp/
+```
+
+Это переживает ребут. Правило хранится в базе semanage.
+
+Создать собственный тип файла
+
+```
+# Создать новый тип, производный от существующего
+sudo semanage fcontext -a -t httpd_sys_content_t "/myapp(/.*)?"
+```
+
+Но если нужен совершенно новый тип, которого нет в системе — это делается через модуль политики (см. ниже).
+
+## Булеаны
+
+### Стандартные булеаны
+
+Стандартные булеаны заданы в политике. Включать/выключать можно, а создать новый булеан из командной строки нельзя — только через модуль политики.
+
+### Создать собственный булеан (через модуль)
+
+Создайте файл myapp.te:
+
+```
+module myapp 1.0;
+
+require {
+    type httpd_t;
+    type myapp_port_t;
+    class tcp_socket name_connect;
+}
+
+# Объявить новый булеан
+bool myapp_allow_connect true;
+
+# Правило, зависящее от булеана
+if (myapp_allow_connect) {
+    allow httpd_t myapp_port_t:tcp_socket name_connect;
+}
+```
+
+Скомпилируйте и установите:
+
+```
+checkmodule -M -m -o myapp.mod myapp.te
+semodule_package -o myapp.pp myapp.mod
+sudo semodule -i myapp.pp
+```
+
+После этого появится новый булеан:
+
+```
+getsebool myapp_allow_connect
+sudo setsebool -P myapp_allow_connect on
+```
+
+### Домены (типы процессов)
+
+Создать собственный домен
+
+Создайте файл myapp_cil.cil (формат CIL — современный способ):
+
+```
+; Объявить новый тип
+(type myapp_t)
+(typeattribute myapp_t)
+(roletype object_r myapp_t)
+
+; Объявить исполняемый тип для файла
+(type myapp_exec_t)
+(typeattribute myapp_exec_t)
+
+; Переход: при запуске файла myapp_exec_t процесс переходит в myapp_t
+(allow myapp_t myapp_exec_t (file (read execute open map)))
+(typetransition init_t myapp_exec_t process myapp_t)
+
+; Разрешить myapp_t читать свои файлы
+(type myapp_content_t)
+(typeattribute myapp_content_t)
+(allow myapp_t myapp_content_t (file (read write open create unlink)))
+(allow myapp_t myapp_content_t (dir (read write add_name remove_name search)))
+```
+
+Установите:
+
+```
+sudo semodule -i myapp_cil.cil
+```
+
+Задайте контекст для исполняемого файла:
+
+```
+sudo semanage fcontext -a -t myapp_exec_t "/usr/local/bin/myapp"
+sudo restorecon -v /usr/local/bin/myapp
+```
+
+Теперь при запуске /usr/local/bin/myapp процесс получит домен myapp_t и будет ограничен вашими правилами.
+
+### Упрощённый путь: audit2allow
+
+Чаще всего новый домен не нужен — достаточно создать модуль с правилами для существующего домена:
+
+```
+# Собрать блокировки из лога
+sudo ausearch -m AVC -ts recent | audit2allow -M mynginx
+
+# Посмотреть, что внутри
+cat mynginx.te
+
+# Установить
+sudo semodule -i mynginx.pp
+```
+
+audit2allow автоматически генерирует require-блок и allow-правила — ничего вручную писать не нужно.
+
+### Роли и пользователи SELinux
+
+Создать новую роль
+
+```
+sudo semanage user -a -R "myapp_r" myapp_u
+```
+
+Создать SELinux-пользователя и привязать к системному
+
+```
+# Создать SELinux-пользователя с ролью user_r
+sudo semanage user -a -R "user_r" -P user myapp_u
+
+# Привязать системного пользователя ivan к SELinux-пользователю myapp_u
+sudo semanage login -a -s myapp_u ivan
+```
+
+Проверить:
+
+```
+semanage login -l
+```
+
+### Порты
+
+Назначить тип порту
+
+```
+# Разрешить httpd слушать порт 8080
+sudo semanage port -a -t http_port_t -p tcp 8080
+```
+
+Изменить существующее назначение
+
+```
+sudo semanage port -m -t http_port_t -p tcp 8080
+```
+
+Посмотреть все назначения портов
+
+```
+semanage port -l
+```
+
+### Модули политики
+
+Посмотреть установленные модули
+
+```
+sudo semodule -l
+```
+
+Установить модуль
+
+```
+sudo semodule -i myapp.pp
+```
+
+Удалить модуль
+
+```
+sudo semodule -r myapp
+```
+
+Обновить модуль
+
+Просто пересоберите и установите заново — semodule -i заменит старую версию.
+Практический пример: веб-приложение в нестандартной директории
+
+Допустим, Nginx должен читать файлы из /opt/myapp/, но SELinux блокирует доступ.
+
+```
+# 1. Проверить контекст директории
+ls -Z /opt/myapp/
+# Допустим, там какой-то default_t
+
+# 2. Задать правильный контекст
+sudo semanage fcontext -a -t httpd_sys_content_t "/opt/myapp(/.*)?"
+sudo restorecon -Rv /opt/myapp/
+
+# 3. Если Nginx должен писать туда — нужен тип для записи
+sudo semanage fcontext -a -t httpd_sys_rw_content_t "/opt/myapp/uploads(/.*)?"
+sudo restorecon -Rv /opt/myapp/uploads/
+
+# 4. Если нужно подключение к БД — включить булеан
+sudo setsebool -P httpd_can_network_connect_db on
+
+# 5. Если что-то всё ещё блокируется — создать модуль
+sudo ausearch -m AVC -ts recent | audit2allow -M mynginx
+sudo semodule -i mynginx.pp
+```
+
+Что можно и чего нельзя делать
+
+|Объект	|Создать новый	|Изменить	|Из командной строки|
+|:--------------|:-----------------|:-----------------------------|:-------------------------------|
+|Контекст файла	|—	|chcon, semanage fcontext	|Да |
+|Тип файла	|Да, через модуль	|semanage fcontext	|Частично |
+|Булеан	|Да, через модуль	|setsebool	|Создание — только модуль |
+|Домен (тип процесса)	|Да, через модуль	|Через модуль	|Создание — только модуль |
+|Роль	|Да, через semanage user	|semanage user	|Да |
+|Пользователь SELinux	|Да, через semanage user	|semanage user	|Да |
+|Порт	|—	|semanage port	|Да |
+|Модуль политики	|Да, semodule -i	|semodule -i (замена)	|Да |
+|Правило allow	|Да, через модуль	|Через модуль	|Создание — audit2allow или вручную |
+
+### Итог
+
+Простые вещи — контексты файлов, порты, булеаны, роли — меняются через semanage и setsebool прямо из командной строки. Сложные вещи — новые домены, типы, булеаны, правила — через модули политики, которые компилируются и устанавливаются через semodule. Модули можно создавать как вручную (.te / .cil), так и автоматически через audit2allow.
+
+Ничего из этого не требует отключения SELinux — и это ровно то, для чего SELinux задумывался: гибкая, расширяемая система, которую можно настроить под любую задачу.
+
+Q: А модули .te и .pp чем отличаются ?
+
+A: .te и .pp — это два этапа одного процесса: исходный код политики и её скомпилированная версия.
+
+### .te (Type Enforcement source) — «исходник»
+
+Это текстовый файл с описанием правил SELinux на специальном декларативном языке. В нём ты пишешь: какие типы (домены) создаёшь, какие allow-правила разрешают доступ, какие булеаны влияют на эти правила и т. д.
+
+Пример myapp.te:
+
+```
+policy_module(myapp, 1.0.0)
+
+type myapp_t;
+type myapp_exec_t;
+
+allow myapp_t myapp_exec_t:file { execute getattr };
+typetransition init_t myapp_exec_t process myapp_t;
+```
+
+Что можно делать с .te:
+
+    читать и править в редакторе (vi/nano/vscode) — это обычный текст;
+	
+    генерировать из логов через audit2allow -M name (он создаст .te);
+	
+    проверять синтаксис и зависимости через checkmodule.
+
+### .pp (Policy Package) — «бинарник» для ядра
+
+Это бинарный файл, который понимает ядро Linux. Его нельзя читать как текст, но именно его ядро загружает и применяет.
+
+.pp получают из .te в два шага:
+
+    checkmodule -M -m -o myapp.mod myapp.te — компиляция в промежуточный модуль.
+	
+    semodule_package -o myapp.pp -m myapp.mod — упаковка в готовый пакет политики.
+
+Затем его ставят в систему:
+
+```
+sudo semodule -i myapp.pp
+```
+
+Ключевые отличия
+
+|Характеристика	|.te	|.pp |
+|:---------------------------|:--------------------------------|:--------------------------------|
+|Формат	|Текст (читаемый человеком)	|Бинарный (только для ядра) |
+|Назначение	|Разработка, правка, аудит правил	|Применение политики в системе |
+|Где используется	|В процессе сборки, в Git, в скриптах	|При установке через semodule -i |
+|Можно ли редактировать напрямую	|Да	|Нет (нужно пересобирать из .te) |
+|Зависимости от других типов/правил	|Описываются явно в require	|Уже разрешены на этапе компиляции |
+
+Как это выглядит в типичном рабочем потоке:
+
+Допустим, ты делаешь свой модуль под KVM‑стенд или Vagrant‑бокс:
+
+```
+# 1. Генерируем исходный .te из логов AVC
+sudo ausearch -m AVC -ts recent | audit2allow -M mystand
+
+# 2. Смотрим, что получилось (читаем .te)
+cat mystand.te
+
+# 3. Компилируем в .pp
+checkmodule -M -m -o mystand.mod mystand.te
+semodule_package -o mystand.pp -m mystand.mod
+
+# 4. Ставим в систему
+sudo semodule -i mystand.pp
+```
+
+После этого semodule -l покажет твой модуль, а ядро будет применять эти правила.
+
+### Важные нюансы 
+
+    Никогда не правишь .pp вручную. Если нужно изменить правило — меняешь .te, затем заново компилируешь в .pp.
+	
+    .te можно хранить в репозитории и деплоить как часть инфраструктуры (например, вместе с Vagrantfile или Ansible-ролью). Это удобно для воспроизводимых стендов.
+	
+    Если модуль не загружается, ошибка обычно на этапе checkmodule или semodule — она укажет, какого типа или правила не хватает. Это как компиляция C‑кода: сначала сборка, потом линковка, потом запуск.
+	
+    audit2allow по умолчанию сразу делает и .te, и .pp, поэтому новички часто не видят разницы. Но если ты хочешь доработать правила (добавить булеан, убрать лишнее, сделать аккуратнее под свой стенд) — тебе нужен именно .te.
+
