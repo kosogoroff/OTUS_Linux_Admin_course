@@ -1051,9 +1051,9 @@ Sep 10 18:37:11 selinux systemd[1]: Failed to start The nginx HTTP and reverse p
 После этого nginx снова запускаться не будет из-зи запрета доступа к порту 4881.
 
 
-## Обеспечение работоспособности приложения при включенном SELinux
+## 2. Обеспечение работоспособности приложения при включенном SELinux
 
-Выполняем клонирование репозитория, переходим в него, модифицируем исходный Vagrantfile репозитория для работы в гипервизоре kvm/libvirt и с локально установленным боксом almalinux/9. Исходный файл для virtualbox:
+Выполняем клонирование репозитория, переходим в него, модифицируем исходный Vagrantfile репозитория для работы и в гипервизоре virtualbox, и в гипервизоре kvm/libvirt,  и с локально установленным боксом almalinux/9. Исходный файл для virtualbox:
 
 ```
 # -*- mode: ruby -*-
@@ -1095,9 +1095,13 @@ end
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# Имя бокса можно переопределить через переменную окружения:
+#   VAGRANT_BOX=almalinux9-stand vagrant up --provider=libvirt
+BOX_NAME = ENV['VAGRANT_BOX'] || 'almalinux/9'
+
 Vagrant.configure(2) do |config|
-  config.vm.box = "almalinux9-stand"
-#  config.vm.box_version = "9.4.20240805"
+  config.vm.box = BOX_NAME
+#  config.vm.box_version = "9.4.20240805" if BOX_NAME == 'almalinux/9'
 
   config.vm.provision "ansible" do |ansible|
     #ansible.verbose = "vvv"
@@ -1105,6 +1109,13 @@ Vagrant.configure(2) do |config|
     ansible.become = "true"
   end
 
+  # --- VirtualBox ---
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 2048
+    v.cpus = 2
+  end
+
+  # --- libvirt/KVM ---
   config.vm.provider "libvirt" do |v|
     v.memory = 2048
     v.cpus = 2
@@ -1114,6 +1125,7 @@ Vagrant.configure(2) do |config|
     ns01.vm.synced_folder ".", "/vagrant", disabled: true
     ns01.vm.network "private_network",
       ip: "192.168.50.10",
+      virtualbox__intnet: "dns",
       libvirt__network_name: "dns",
       libvirt__host_ip: "192.168.50.1",
       libvirt__netmask: "255.255.255.0"
@@ -1124,6 +1136,7 @@ Vagrant.configure(2) do |config|
     client.vm.synced_folder ".", "/vagrant", disabled: true
     client.vm.network "private_network",
       ip: "192.168.50.15",
+      virtualbox__intnet: "dns",
       libvirt__network_name: "dns",
       libvirt__host_ip: "192.168.50.1",
       libvirt__netmask: "255.255.255.0"
@@ -1132,6 +1145,42 @@ Vagrant.configure(2) do |config|
 end
 [admin_insta11@mv334 vagrant_selinux_dns_problems_kvm]$
 ```
+
+Данный модифицированный Vagrantfile допускает следующее использование:
+
+1) Для создания ВМ в гипервизоре virtualbox с использованием бокса almalinux/9 на vagrantcloud нужно запустить командой
+
+```
+vagrant up
+```
+
+Если боксы установлены на компьютере локально, например:
+
+```
+[admin_insta11@mv334 ~]$ vagrant box list
+almalinux9-stand    (libvirt, 0)
+almalinux9-stand-vb (virtualbox, 0)
+[admin_insta11@mv334 ~]$
+```
+
+2) Для создания ВМ в гипервизоре libvirt/kvm с использованием локально установленного бокса almalinux/9 нужно запустить командой
+
+```
+VAGRANT_BOX=almalinux9-stand vagrant up --provider=libvirt
+```
+
+3) Для создания ВМ в гипервизоре virtualbox с использованием локально установленного бокса almalinux/9 нужно запустить командой
+
+```
+VAGRANT_BOX=almalinux9-stand-vb vagrant up --provider=libvirt
+```
+
+или
+
+```
+VAGRANT_BOX=almalinux9-stand-vb vagrant up
+```
+
 
 Создаём учебный стенд с помощью vargant и провизионинга ansible:
 
@@ -1586,7 +1635,7 @@ drwxrwx--T. 5 root  named system_u:object_r:named_zone_t:s0   127 Sep 11 16:35 .
 [vagrant@ns01 ~]$ 
 ```
 
-Из вывода видно, что процесс запущенный процесс named с доменом named_t не может выполнять операции write/записи над объектами с контекстом named_conf_t , но может выполнять операции записи над объектами с контекстом named_zone_t. При этом директория /etc/named/ и все объекты внутри неё имеют контекст named_conf_t (то есть процесс named с доменом named_t может из них только читать, а писать в них не может - отсюда и возникающая ошибка доступа SELinux) - в директории /etc/named/ лежат конфигурации named, которые сам процесс изменять не должен. А дирктория /var/named/ содержит файлы описания статических и динамических зон, которые процесс named может не только читать, но и записывать при получении изменений, поэтому сама директория /var/named/ имеет контекст named_zone_t, а файлы и директории в ней имеют контексты named_zone_t либо named_cache_t (для этих контекстов домен named_t может применять операцию записи).
+Из вывода видно, что процесс запущенный процесс named с доменом named_t не может выполнять операции write/записи над объектами с контекстом named_conf_t , но может выполнять операции записи над объектами с контекстом named_zone_t. При этом директория /etc/named/ и все объекты внутри неё имеют контекст named_conf_t (то есть процесс named с доменом named_t может из них только читать, а писать в них не может - отсюда и возникающая ошибка доступа SELinux) - в директории /etc/named/ лежат конфигурации named, которые сам процесс изменять не должен. А директория /var/named/ содержит файлы описания статических и динамических зон, которые процесс named может не только читать, но и записывать при получении изменений, поэтому сама директория /var/named/ имеет контекст named_zone_t, а файлы и директории в ней имеют контексты named_zone_t либо named_cache_t (для этих контекстов домен named_t может применять операцию записи).
 
 Проблема в том, что файлы описания статических и динамических зон находятся в дериктории /etc/named/ (где должны находиться только конфигурации самого named), а не в директории /var/named - где они должны находиться при правильной конфигурации.
 
@@ -1607,7 +1656,7 @@ drw-rwx---.  2 root named unconfined_u:object_r:named_zone_t:s0   88 Sep 11 15:3
 [root@ns01 ~]# 
 ```
 
-После этого изменения контекста на ns01 повторно пробуем на ВМ client внести изменения в зону:
+После этого изменения контекста на ns01 повторно пробуем на ВМ client внести изменения в зону - после изменения контекста директории /etc/named и всех объектов в ней на named_zone_t процесс named получает возможность производить операции записи в файлы в директории /etc/named/ , поэтому ошибки при изменении зон больше не возникает:
 
 ```
 [root@client ~]# nsupdate -k /etc/named.zonetransfer.key
@@ -1667,7 +1716,8 @@ www.ddns.lab.		60	IN	A	192.168.50.15
 [root@client ~]# 
 ```
 
-Важно, что мы не добавили новые правила в политику для назначения этого контекста в каталоге. Значит, что при перемаркировке файлов контекст вернётся на тот, который прописан в файле политики.
+Важно, что мы не добавили новые правила в политику для назначения этого контекста в каталоге. Команда chcon предназначена только для временного изменения контекста.
+Значит, что при перемаркировке файлов контекст вернётся на тот, который прописан в файле политики.
 Для того, чтобы вернуть правила обратно, можно ввести команду: restorecon -v -R /etc/named - после этого изменения в зону опять не будут сохраняться:
 
 ```
@@ -1696,7 +1746,7 @@ update failed: SERVFAIL
 [root@client ~]# 
 ```
 
-В лабе использовалась команда chcon — это временное изменение, которое restorecon или relabel затрут. Чтобы закрепить навсегда, нужно добавить правило в базу semanage fcontext. Если бы мы хотели закрепить сделанные изменения в политиках SELinux, то следовало бы ввести следующие команды:
+В лабе использовалась команда chcon — это временное изменение, которое restorecon или relabel затрут. Чтобы закрепить изменения контекста навсегда, нужно добавить правило в базу semanage fcontext. Если бы мы хотели закрепить сделанные изменения в политиках SELinux, то следовало бы ввести следующие команды:
 
 ```
 sudo semanage fcontext -a -t named_zone_t "/etc/named(/.*)?" # Команда вносит постоянное правило в политики fcontext 
@@ -1710,11 +1760,11 @@ sudo semanage fcontext -d "/etc/named(/.*)?"  # Если нужно откати
 sudo restorecon -Rv /etc/named/
 ```
 
-Таким образом, для решания проблемы с невозможностью внесения изменений в динамичекие зоны DNS можно применить три возможных решения:
+Таким образом, для решения проблемы с невозможностью внесения изменений в динамичекие зоны DNS можно применить три возможных решения:
 
-1. Изменить контекст директории /etc/named и объектов внутри неё с named_conf_t на named_zone_t , чтобы процесс named с доменом name_t мог производить запись в эту директорию и файлы в ней - данный метод использован в лабораторной работе выше. С точки зрения безопасности данный метод открывает уязвимость, так как предоставляет потенциальную возможность процессу named изменять все файлы в директории /etc/named , включчая собственные конфигурации;
+1. Изменить контекст директории /etc/named и объектов внутри неё с named_conf_t на named_zone_t , чтобы процесс named с доменом name_t мог производить запись в эту директорию и файлы в ней - данный метод использован в лабораторной работе выше. С точки зрения безопасности данный метод открывает уязвимость, так как предоставляет потенциальную возможность процессу named изменять все файлы в директории /etc/named , включчая собственные конфигурации. Такой вариант с временным изменением контекста применён в методичке к лабораторной работе;
 
-2. Перенести файлы описание статических и динамических зон в директорию /var/named с соответствующим изменением в файле конфигурации . Файлы зон при правильной конфигурации named должны лежать в директориях /var/named/ для статических зон, /var/named/dynamic/ для динамических (DDNS):
+2. Перенести файлы с описанием статических и динамических зон в директорию /var/named с соответствующим изменением в файле конфигурации /etc/named.conf . Файлы зон при правильной конфигурации named должны лежать в директориях /var/named/ для статических зон, /var/named/dynamic/ для динамических (DDNS):
 
 ```
 [root@ns01 ~]# cat /etc/named.conf | grep "zone \| file "
@@ -1760,83 +1810,302 @@ sudo restorecon -Rv /etc/named/
 
 https://github.com/kosogoroff/vagrant_selinux_dns_lab_fixed.git
 
-Для исправления проблемы файлы конфигурации динамических зон, в которые должен записывать сам процесс named, перенесены из директории /etc/named/dynamic (имеет контекст named_conf_t) в директорию /var/named/dynamic (имеет контекст named_cache_t), а файлы статических зон и конфигурации оставлены в директории /etc/named - в эти файлы процесс named записывать не должен.
+Для исправления проблемы файлы конфигурации динамических зон (в которые должен записывать сам процесс named), перенесены из директории /etc/named/dynamic (имеет контекст named_conf_t) в директорию /var/named/dynamic (имеет контекст named_cache_t), а файлы статических зон и конфигурации оставлены в директории /etc/named - в эти файлы сам процесс named записывать не должен.
 Соответственно в репозитории изменён файл playbook.yml провизионинга Ansible (файлы динамических зон копируются в директорию /var/named/dynamic ,
-а также изменены пути в файлам динамических зон в файле конфигурации named.conf).
-
-При использовании нового репозитория ошибки при изменении динамических зон не возникает:
+а также изменены пути в файлам динамических зон в файле конфигурации named.conf):
 
 ```
-admin_insta11@mv334 ~]$ mv vagrant_selinux_dns_problems_kvm_fixed vagrant_selinux_dns_problems_fixed
+[admin_insta11@mv334 vagrant_selinux_dns_lab_fixed]$ cat ~/vagrant_selinux_dns_lab_fixed/provisioning/playbook.yml
+---
+- hosts: all # part running on all hosts
+  become: true
+  tasks:
+  - name: install packages # переведём синтаксис yum из deprecated 
+    ansible.builtin.dnf:
+      name: "{{ packages }}"
+      state: present 
+    vars:
+      packages:
+      - bind
+      - bind-utils
+      - chrony
+      - policycoreutils-python-utils
+      - setools-console
+      - setroubleshoot-server
+
+- hosts: ns01 # server ns01 provision
+  become: true
+  tasks:
+  - name: copy named.conf
+    copy:
+      src: files/ns01/named.conf
+      dest: /etc/named.conf
+      owner: root
+      group: named
+      mode: 0640
+
+  - name: copy master zone dns.lab
+    copy:
+      src: "{{ item }}"
+      dest: /etc/named/
+      owner: root
+      group: named
+      mode: 0660
+    with_fileglob:
+      - files/ns01/named.dns*
+
+  - name: copy dynamic zone ddns.lab
+    copy:
+      src: files/ns01/named.ddns.lab
+      dest: /var/named/dynamic/
+      owner: named
+      group: named
+      mode: 0660
+
+  - name: copy dynamic zone ddns.lab.view1
+    copy:
+      src: files/ns01/named.ddns.lab.view1
+      dest: /var/named/dynamic/
+      owner: named
+      group: named
+      mode: 0660
+
+  - name: copy master zone newdns.lab
+    copy:
+      src: files/ns01/named.newdns.lab
+      dest: /etc/named/
+      owner: root
+      group: named
+      mode: 0660
+
+  - name: copy rev zones
+    copy:
+      src: files/ns01/named.50.168.192.rev
+      dest: /etc/named/
+      owner: root
+      group: named
+      mode: 0660
+
+  - name: copy resolv.conf to server
+    copy:
+      src: files/ns01/resolv.conf
+      dest: /etc/resolv.conf
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: copy transferkey to server
+    copy:
+      src: files/named.zonetransfer.key.special
+      dest: /etc/named.zonetransfer.key
+      owner: root
+      group: named
+      mode: 0644
+
+  - name: set /etc/named permissions
+    file:
+      path: /etc/named
+      owner: root
+      group: named
+      mode: 0670
+
+  - name: set /var/named/dynamic permissions
+    file:
+      path: /var/named/dynamic
+      owner: root
+      group: named
+      mode: 0670
+
+  - name: ensure named is running and enabled
+    systemd:
+      name: named
+      state: restarted
+      enabled: yes
+
+- hosts: client # first client provision
+  become: true
+  tasks:
+  - name: copy resolv.conf to the client
+    copy:
+      src: files/client/resolv.conf
+      dest: /etc/resolv.conf
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: copy rndc conf file
+    copy:
+      src: files/client/rndc.conf
+      dest: /home/vagrant/rndc.conf
+      owner: vagrant
+      group: vagrant
+      mode: 0644
+
+  - name: copy motd to the client
+    copy:
+      src: files/client/motd
+      dest: /etc/motd
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: copy transferkey to client
+    copy:
+      src: files/named.zonetransfer.key.special
+      dest: /etc/named.zonetransfer.key
+      owner: root
+      group: named
+      mode: 0644
+[admin_insta11@mv334 vagrant_selinux_dns_lab_fixed]$ cat ~/vagrant_selinux_dns_lab_fixed/provisioning/files/ns01/named.conf
+options {
+    // network 
+	listen-on port 53 { 192.168.50.10; };
+	// listen-on-v6 port 53 { ::1; };
+
+    // data
+	directory 	"/var/named";
+	dump-file 	"/var/named/data/cache_dump.db";
+	statistics-file "/var/named/data/named_stats.txt";
+	memstatistics-file "/var/named/data/named_mem_stats.txt";
+
+    // server
+	recursion yes;
+	allow-query     { any; };
+    allow-transfer { any; };
+    
+    // dnssec
+	dnssec-enable yes;
+	dnssec-validation yes;
+
+    // others
+	bindkeys-file "/etc/named.iscdlv.key";
+	managed-keys-directory "/var/named/dynamic";
+	pid-file "/run/named/named.pid";
+	session-keyfile "/run/named/session.key";
+};
+
+logging {
+        channel default_debug {
+                file "data/named.run";
+                severity dynamic;
+        };
+};
+
+// RNDC Control for client
+key "rndc-key" {
+    algorithm hmac-md5;
+    secret "GrtiE9kz16GK+OKKU/qJvQ==";
+};
+
+controls {
+        inet 192.168.50.10 allow { 192.168.50.15; } keys { "rndc-key"; }; 
+};
+
+acl "view1" {
+    192.168.50.15/32; // client
+};
+
+// ZONE TRANSFER WITH TSIG
+include "/etc/named.zonetransfer.key"; 
+
+view "view1" {
+    match-clients { "view1"; };
+
+    // root zone
+    zone "." IN {
+    	type hint;
+    	file "named.ca";
+    };
+
+    // zones like localhost
+    include "/etc/named.rfc1912.zones";
+    // root DNSKEY
+    include "/etc/named.root.key";
+
+    // labs dns zone
+    zone "dns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.dns.lab.view1";
+    };
+
+    // labs ddns zone
+    zone "ddns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        allow-update { key "zonetransfer.key"; };
+        file "/var/named/dynamic/named.ddns.lab.view1";
+    };
+
+    // labs newdns zone
+    zone "newdns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.newdns.lab";
+    };
+
+    // labs zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.50.168.192.rev";
+    };
+};
+
+view "default" {
+    match-clients { any; };
+
+    // root zone
+    zone "." IN {
+    	type hint;
+    	file "named.ca";
+    };
+
+    // zones like localhost
+    include "/etc/named.rfc1912.zones";
+    // root DNSKEY
+    include "/etc/named.root.key";
+
+    // labs dns zone
+    zone "dns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.dns.lab";
+    };
+
+    // labs ddns zone
+    zone "ddns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        allow-update { key "zonetransfer.key"; };
+        file "/var/named/dynamic/named.ddns.lab";
+    };
+
+    // labs newdns zone
+    zone "newdns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.newdns.lab";
+    };
+
+    // labs zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.50.168.192.rev";
+    };
+};
+```
+
+При использовании нового репозитория vagrant_selinux_dns_lab_fixed ошибки при изменении динамических зон больше не возникает:
+
+```
+admin_insta11@mv334 ~]$ mv vagrant_selinux_dns_problems vagrant_selinux_dns_problems_fixed
 [admin_insta11@mv334 ~]$ cd vagrant_selinux_dns_problems_fixed
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ vagrant up
-Bringing machine 'ns01' up with 'virtualbox' provider...
-Bringing machine 'client' up with 'virtualbox' provider...
-==> ns01: This machine used to live in /home/admin_insta11/vagrant_selinux_dns_problems_kvm_fixed but it's now at /home/admin_insta11/vagrant_selinux_dns_problems_fixed.
-==> ns01: Depending on your current provider you may need to change the name of
-==> ns01: the machine to run it as a different machine.
-==> ns01: Clearing any previously set forwarded ports...
-==> ns01: Clearing any previously set network interfaces...
-==> ns01: Preparing network interfaces based on configuration...
-    ns01: Adapter 1: nat
-    ns01: Adapter 2: intnet
-==> ns01: Forwarding ports...
-    ns01: 22 (guest) => 2222 (host) (adapter 1)
-==> ns01: Running 'pre-boot' VM customizations...
-==> ns01: Booting VM...
-==> ns01: Waiting for machine to boot. This may take a few minutes...
-    ns01: SSH address: 127.0.0.1:2222
-    ns01: SSH username: vagrant
-    ns01: SSH auth method: private key
-==> ns01: Machine booted and ready!
-==> ns01: Checking for guest additions in VM...
-    ns01: The guest additions on this VM do not match the installed version of
-    ns01: VirtualBox! In most cases this is fine, but in rare cases it can
-    ns01: prevent things such as shared folders from working properly. If you see
-    ns01: shared folder errors, please make sure the guest additions within the
-    ns01: virtual machine match the version of VirtualBox you have installed on
-    ns01: your host and reload your VM.
-    ns01: 
-    ns01: Guest Additions Version: 7.2.16
-    ns01: VirtualBox Version: 7.1
-==> ns01: Setting hostname...
-==> ns01: Configuring and enabling network interfaces...
-==> ns01: Machine already provisioned. Run `vagrant provision` or use the `--provision`
-==> ns01: flag to force provisioning. Provisioners marked to run always will still run.
-==> client: This machine used to live in /home/admin_insta11/vagrant_selinux_dns_problems_kvm_fixed but it's now at /home/admin_insta11/vagrant_selinux_dns_problems_fixed.
-==> client: Depending on your current provider you may need to change the name of
-==> client: the machine to run it as a different machine.
-==> client: Clearing any previously set forwarded ports...
-==> client: Fixed port collision for 22 => 2222. Now on port 2200.
-==> client: Clearing any previously set network interfaces...
-==> client: Preparing network interfaces based on configuration...
-    client: Adapter 1: nat
-    client: Adapter 2: intnet
-==> client: Forwarding ports...
-    client: 22 (guest) => 2200 (host) (adapter 1)
-==> client: Running 'pre-boot' VM customizations...
-==> client: Booting VM...
-==> client: Waiting for machine to boot. This may take a few minutes...
-    client: SSH address: 127.0.0.1:2200
-    client: SSH username: vagrant
-    client: SSH auth method: private key
-==> client: Machine booted and ready!
-==> client: Checking for guest additions in VM...
-    client: The guest additions on this VM do not match the installed version of
-    client: VirtualBox! In most cases this is fine, but in rare cases it can
-    client: prevent things such as shared folders from working properly. If you see
-    client: shared folder errors, please make sure the guest additions within the
-    client: virtual machine match the version of VirtualBox you have installed on
-    client: your host and reload your VM.
-    client: 
-    client: Guest Additions Version: 7.2.16
-    client: VirtualBox Version: 7.1
-==> client: Setting hostname...
-==> client: Configuring and enabling network interfaces...
-==> client: Machine already provisioned. Run `vagrant provision` or use the `--provision`
-==> client: flag to force provisioning. Provisioners marked to run always will still run.
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ 
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ 
+[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ vi provisioning/files/ns01/named.conf
+[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ vi provisioning/playbook.yml 
+[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$
+[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git remote remove origin
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git remote add origin https://github.com/kosogoroff/vagrant_selinux_dns_lab_fixed.git
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git add .
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git status
@@ -1844,6 +2113,8 @@ Bringing machine 'client' up with 'virtualbox' provider...
 Изменения, которые будут включены в коммит:
   (используйте «git restore --staged <файл>...», чтобы убрать из индекса)
 	изменено:      Vagrantfile
+	изменено:      provisioning/files/ns01/named.conf
+	изменено:      provisioning/playbook.yml
 
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git commit -m "ДЗ #15: клонированный стенд SELinux"
 Author identity unknown
@@ -1866,18 +2137,6 @@ fatal: не удалось выполнить автоопределение а�
  1 file changed, 28 insertions(+), 7 deletions(-)
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git branch -M main
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git push -u origin main
-remote: Invalid username or token. Password authentication is not supported for Git operations.
-fatal: Authentication failed for 'https://github.com/kosogoroff/vagrant_selinux_dns_lab_fixed.git/'
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git push -u origin main
-remote: Invalid username or token. Password authentication is not supported for Git operations.
-fatal: Authentication failed for 'https://github.com/kosogoroff/vagrant_selinux_dns_lab_fixed.git/'
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git push -u origin main
-remote: Invalid username or token. Password authentication is not supported for Git operations.
-fatal: Authentication failed for 'https://github.com/kosogoroff/vagrant_selinux_dns_lab_fixed.git/'
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git push -u origin main
-remote: Invalid username or token. Password authentication is not supported for Git operations.
-fatal: Authentication failed for 'https://github.com/kosogoroff/vagrant_selinux_dns_lab_fixed.git/'
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git push -u origin main
 Перечисление объектов: 35, готово.
 Подсчет объектов: 100% (35/35), готово.
 При сжатии изменений используется до 4 потоков
@@ -1888,61 +2147,6 @@ remote: Resolving deltas: 100% (11/11), done.
 To https://github.com/kosogoroff/vagrant_selinux_dns_lab_fixed.git
  * [new branch]      main -> main
 branch 'main' set up to track 'origin/main'.
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ ll
-итого 16
--rw-rw-r-- 1 admin_insta11 admin_insta11 1501 сен 12 15:08 LICENSE
-drwxrwxr-x 3 admin_insta11 admin_insta11 4096 сен 12 15:08 provisioning
--rwxrwxr-x 1 admin_insta11 admin_insta11 1931 сен 12 15:08 README.md
--rwxrwxr-x 1 admin_insta11 admin_insta11 1474 сен 12 15:39 Vagrantfile
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ rm -rf .git
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git init
-hint: Using 'master' as the name for the initial branch. This default branch name
-hint: will change to "main" in Git 3.0. To configure the initial branch name
-hint: to use in all of your new repositories, which will suppress this warning,
-hint: call:
-hint:
-hint: 	git config --global init.defaultBranch <name>
-hint:
-hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
-hint: 'development'. The just-created branch can be renamed via this command:
-hint:
-hint: 	git branch -m <name>
-hint:
-hint: Disable this message with "git config set advice.defaultBranchName false"
-Инициализирован пустой репозиторий Git в /home/admin_insta11/vagrant_selinux_dns_problems_fixed/.git/
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git remote add origin https://github.com/kosogoroff/vagrant_selinux_dns_lab_fixed.git
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git add .
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ git status
-Текущая ветка: master
-
-Еще нет коммитов
-
-Изменения, которые будут включены в коммит:
-  (используйте «git rm --cached <файл>...», чтобы убрать из индекса)
-	новый файл:    .gitignore
-	новый файл:    LICENSE
-	новый файл:    README.md
-	новый файл:    Vagrantfile
-	новый файл:    provisioning/files/client/motd
-	новый файл:    provisioning/files/client/resolv.conf
-	новый файл:    provisioning/files/client/rndc.conf
-	новый файл:    provisioning/files/named.zonetransfer.key.special
-	новый файл:    provisioning/files/ns01/named.50.168.192.rev
-	новый файл:    provisioning/files/ns01/named.conf
-	новый файл:    provisioning/files/ns01/named.ddns.lab
-	новый файл:    provisioning/files/ns01/named.ddns.lab.view1
-	новый файл:    provisioning/files/ns01/named.dns.lab
-	новый файл:    provisioning/files/ns01/named.dns.lab.view1
-	новый файл:    provisioning/files/ns01/named.newdns.lab
-	новый файл:    provisioning/files/ns01/resolv.conf
-	новый файл:    provisioning/playbook.yml
-
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ vi provisioning/files/ns01/named.conf
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ vi provisioning/playbook.yml
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ vi provisioning/files/ns01/named.conf
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ 
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ 
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ 
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ 
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ vagrant up --provision
 Bringing machine 'ns01' up with 'virtualbox' provider...
@@ -2038,10 +2242,6 @@ PLAY RECAP *********************************************************************
 client                     : ok=7    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
 
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ 
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ 
-[admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ vagrant ssh cliant
-The machine with the name 'cliant' was not found configured for
-this Vagrant environment.
 [admin_insta11@mv334 vagrant_selinux_dns_problems_fixed]$ vagrant status
 Current machine states:
 
