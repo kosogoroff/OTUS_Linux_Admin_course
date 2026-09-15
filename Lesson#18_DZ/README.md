@@ -139,7 +139,7 @@ end
 Но данный файл создан для работы с virtualbox, поэтому для использования с KVM в нём нужно сделать несколько изменений:
 Нужно поменять три вещи: провайдер, сеть и источник бокса.
 
-Также в связи с недоступностью портала https://portal.cloud.hashicorp.com/ для проверки и работы заранее локально скачаны несколько Vagrant box для различных версий Linux, для создания ВМ будем использовать локально скачаные и установленные боксы. Модифицированный Vagrantfile приведён ниже:
+Также в связи с недоступностью портала https://portal.cloud.hashicorp.com/ для проверки и работы заранее локально скачаны несколько Vagrant box для различных версий Linux, для создания ВМ будем использовать локально скачаные и установленные боксы. Модифицированный Vagrantfile приведён ниже (с учётом возможности запуска под libvirt/kvm и virtualbox, а также с учётом выполнение лабораточного задания):
 
 ```
 # Имя бокса можно переопределить через переменную окружения:
@@ -243,11 +243,504 @@ Vagrant.configure("2") do |config|
 end
 ```
 
+Данный модифицированный Vagrantfile допускает следующее использование:
+
+1) Для создания ВМ в гипервизоре virtualbox с использованием бокса ubuntu-jammy на vagrantcloud нужно запустить командой
+
+```
+vagrant up
+```
+
+Если боксы установлены на компьютере локально, например:
+
+```
+[admin_insta11@mv334 network-storage-provisioning]$ vagrant box list
+almalinux9-stand        (libvirt, 0)
+almalinux9-stand-vb     (virtualbox, 0)
+ubuntu-22.04-virtualbox (virtualbox, 0)
+[admin_insta11@mv334 network-storage-provisioning]$ 
+```
+
+2) Для создания ВМ в гипервизоре libvirt/kvm с использованием локально установленного бокса almalinux/9 нужно запустить командой (в данной лабораторной нам вариант с Almalinux не нужен, приведён справоно)
+
+```
+VAGRANT_BOX=almalinux9-stand vagrant up --provider=libvirt
+```
+
+3) Для создания ВМ в гипервизоре virtualbox с использованием локально установленного бокса ubuntu-22.04-virtualbox нужно запустить командой
+
+```
+VAGRANT_BOX=ubuntu-22.04-virtualbox vagrant up --provider=virtualbox
+```
+
+или
+
+```
+VAGRANT_BOX=ubuntu-22.04-virtualbox vagrant up
+```
+
+Создаём виртуальную машину и производим её конфигурирование и провизионинг средствами vagrant:
+
+- Выбран образ Ubuntu 22.04 для virtualbox.
+- Память ВМ: 2048 МБ.
+
+Добавление дисков:
+
+- Добавлены два виртуальных диска размером 1 ГБ каждый.
+
+Настройка сети:
+
+- Настроен проброс 80 порта с гостевой системы на порт 8080 хостовой системы.
+
+Провижининг:
+
+Написан провижининг, который:
+
+    Форматирует добавленные диски в файловую систему ext4.
+    Создает точки монтирования /mnt/disk1 и /mnt/disk2.
+    Монтирует диски в указанные директории.
+    Добавляет записи в /etc/fstab для автоматического монтирования при загрузке.
+
+
+По ссылке размещён лабораторный стенд с выполненным домашним заданием:
+
+https://github.com/kosogoroff/vagrant-provisioning-net-disks.git
+
+Запускаем и создаём ВМ с использованием созданного Vagrantfile из локально установленного бокса, при первом запуске
+производится его первый провизионинг. В дальнейшем можно запускать просто командой 'vagrant up':
+
+```
+[admin_insta11@mv334 vagrant-provisioning-net-disksg]$ VAGRANT_BOX=ubuntu-22.04-virtualbox vagrant up
+Bringing machine 'ubuntu-jammy' up with 'virtualbox' provider...
+==> ubuntu-jammy: Importing base box 'ubuntu-22.04-virtualbox'...
+==> ubuntu-jammy: Matching MAC address for NAT networking...
+==> ubuntu-jammy: Setting the name of the VM: ubuntu-vm
+==> ubuntu-jammy: Clearing any previously set network interfaces...
+==> ubuntu-jammy: Preparing network interfaces based on configuration...
+    ubuntu-jammy: Adapter 1: nat
+    ubuntu-jammy: Adapter 2: intnet
+==> ubuntu-jammy: Forwarding ports...
+    ubuntu-jammy: 80 (guest) => 8080 (host) (adapter 1)
+    ubuntu-jammy: 22 (guest) => 2222 (host) (adapter 1)
+==> ubuntu-jammy: Configuring storage mediums...
+    ubuntu-jammy: Disk 'disk1' not found in guest. Creating and attaching disk to guest...
+    ubuntu-jammy: Disk 'disk2' not found in guest. Creating and attaching disk to guest...
+==> ubuntu-jammy: Running 'pre-boot' VM customizations...
+==> ubuntu-jammy: Booting VM...
+==> ubuntu-jammy: Waiting for machine to boot. This may take a few minutes...
+    ubuntu-jammy: SSH address: 127.0.0.1:2222
+    ubuntu-jammy: SSH username: vagrant
+    ubuntu-jammy: SSH auth method: private key
+    ubuntu-jammy: 
+    ubuntu-jammy: Vagrant insecure key detected. Vagrant will automatically replace
+    ubuntu-jammy: this with a newly generated keypair for better security.
+    ubuntu-jammy: 
+    ubuntu-jammy: Inserting generated public key within guest...
+    ubuntu-jammy: Removing insecure key from the guest if it's present...
+    ubuntu-jammy: Key inserted! Disconnecting and reconnecting using new SSH key...
+==> ubuntu-jammy: Machine booted and ready!
+==> ubuntu-jammy: Checking for guest additions in VM...
+    ubuntu-jammy: The guest additions on this VM do not match the installed version of
+    ubuntu-jammy: VirtualBox! In most cases this is fine, but in rare cases it can
+    ubuntu-jammy: prevent things such as shared folders from working properly. If you see
+    ubuntu-jammy: shared folder errors, please make sure the guest additions within the
+    ubuntu-jammy: virtual machine match the version of VirtualBox you have installed on
+    ubuntu-jammy: your host and reload your VM.
+    ubuntu-jammy: 
+    ubuntu-jammy: Guest Additions Version: 7.2.4
+    ubuntu-jammy: VirtualBox Version: 7.1
+==> ubuntu-jammy: Configuring and enabling network interfaces...
+==> ubuntu-jammy: Mounting shared folders...
+    ubuntu-jammy: /home/admin_insta11/network-storage-provisioning => /vagrant
+==> ubuntu-jammy: Running provisioner: shell...
+    ubuntu-jammy: Running: inline script
+    ubuntu-jammy: mke2fs 1.46.5 (30-Dec-2021)
+    ubuntu-jammy: Creating filesystem with 261632 4k blocks and 65408 inodes
+    ubuntu-jammy: Filesystem UUID: 04642414-fdd4-4b23-adc4-043c97c984c2
+    ubuntu-jammy: Superblock backups stored on blocks:
+    ubuntu-jammy: 	32768, 98304, 163840, 229376
+    ubuntu-jammy: 
+    ubuntu-jammy: Allocating group tables: done
+    ubuntu-jammy: Writing inode tables: done
+    ubuntu-jammy: Creating journal (4096 blocks): done
+    ubuntu-jammy: Writing superblocks and filesystem accounting information: done
+    ubuntu-jammy: 
+    ubuntu-jammy: umount: /mnt/disk1: not mounted.
+    ubuntu-jammy: sed: -e expression #1, char 3: unknown command: `m'
+    ubuntu-jammy: mke2fs 1.46.5 (30-Dec-2021)
+    ubuntu-jammy: Creating filesystem with 261632 4k blocks and 65408 inodes
+    ubuntu-jammy: Filesystem UUID: 8ac5aa8d-6c28-470f-b6d3-b8c56fb6bbf3
+    ubuntu-jammy: Superblock backups stored on blocks:
+    ubuntu-jammy: 	32768, 98304, 163840, 229376
+    ubuntu-jammy: 
+    ubuntu-jammy: Allocating group tables: done
+    ubuntu-jammy: Writing inode tables: done
+    ubuntu-jammy: Creating journal (4096 blocks): done
+    ubuntu-jammy: Writing superblocks and filesystem accounting information: done
+    ubuntu-jammy: 
+    ubuntu-jammy: umount: /mnt/disk2: not mounted.
+    ubuntu-jammy: sed: -e expression #1, char 3: unknown command: `m'
+    ubuntu-jammy: Hit:1 http://us.archive.ubuntu.com/ubuntu jammy InRelease
+    ubuntu-jammy: Get:2 http://security.ubuntu.com/ubuntu jammy-security InRelease [129 kB]
+    ubuntu-jammy: Get:3 http://us.archive.ubuntu.com/ubuntu jammy-updates InRelease [128 kB]
+    ubuntu-jammy: Get:4 http://us.archive.ubuntu.com/ubuntu jammy-backports InRelease [127 kB]
+    ubuntu-jammy: Get:5 http://security.ubuntu.com/ubuntu jammy-security/main amd64 Packages [3,526 kB]
+    ubuntu-jammy: Get:6 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 Packages [3,795 kB]
+    ubuntu-jammy: Get:7 http://us.archive.ubuntu.com/ubuntu jammy-updates/main Translation-en [563 kB]
+    ubuntu-jammy: Get:8 http://security.ubuntu.com/ubuntu jammy-security/main Translation-en [495 kB]
+    ubuntu-jammy: Get:9 http://us.archive.ubuntu.com/ubuntu jammy-updates/restricted amd64 Packages [6,542 kB]
+    ubuntu-jammy: Get:10 http://security.ubuntu.com/ubuntu jammy-security/restricted amd64 Packages [6,306 kB]
+    ubuntu-jammy: Get:11 http://us.archive.ubuntu.com/ubuntu jammy-updates/restricted Translation-en [1,256 kB]
+    ubuntu-jammy: Get:12 http://us.archive.ubuntu.com/ubuntu jammy-updates/universe amd64 Packages [1,282 kB]
+    ubuntu-jammy: Get:13 http://security.ubuntu.com/ubuntu jammy-security/restricted Translation-en [1,211 kB]
+    ubuntu-jammy: Get:14 http://us.archive.ubuntu.com/ubuntu jammy-updates/universe Translation-en [323 kB]
+    ubuntu-jammy: Get:15 http://us.archive.ubuntu.com/ubuntu jammy-updates/multiverse amd64 Packages [76.8 kB]
+    ubuntu-jammy: Get:16 http://us.archive.ubuntu.com/ubuntu jammy-updates/multiverse Translation-en [15.9 kB]
+    ubuntu-jammy: Get:17 http://us.archive.ubuntu.com/ubuntu jammy-backports/main amd64 Packages [70.2 kB]
+    ubuntu-jammy: Get:18 http://us.archive.ubuntu.com/ubuntu jammy-backports/main Translation-en [11.4 kB]
+    ubuntu-jammy: Get:19 http://us.archive.ubuntu.com/ubuntu jammy-backports/universe amd64 Packages [30.8 kB]
+    ubuntu-jammy: Get:20 http://us.archive.ubuntu.com/ubuntu jammy-backports/universe Translation-en [16.9 kB]
+    ubuntu-jammy: Get:21 http://security.ubuntu.com/ubuntu jammy-security/universe amd64 Packages [1,048 kB]
+    ubuntu-jammy: Get:22 http://security.ubuntu.com/ubuntu jammy-security/universe Translation-en [235 kB]
+    ubuntu-jammy: Get:23 http://security.ubuntu.com/ubuntu jammy-security/multiverse amd64 Packages [69.4 kB]
+    ubuntu-jammy: Get:24 http://security.ubuntu.com/ubuntu jammy-security/multiverse Translation-en [12.9 kB]
+    ubuntu-jammy: Fetched 27.3 MB in 7s (3,732 kB/s)
+    ubuntu-jammy: Reading package lists...
+    ubuntu-jammy: Reading package lists...
+    ubuntu-jammy: Building dependency tree...
+    ubuntu-jammy: Reading state information...
+    ubuntu-jammy: The following additional packages will be installed:
+    ubuntu-jammy:   apache2-bin apache2-data apache2-utils libapr1 libaprutil1
+    ubuntu-jammy:   libaprutil1-dbd-sqlite3 libaprutil1-ldap liblua5.3-0 mailcap mime-support
+    ubuntu-jammy:   ssl-cert
+    ubuntu-jammy: Suggested packages:
+    ubuntu-jammy:   apache2-doc apache2-suexec-pristine | apache2-suexec-custom www-browser
+    ubuntu-jammy: The following NEW packages will be installed:
+    ubuntu-jammy:   apache2 apache2-bin apache2-data apache2-utils libapr1 libaprutil1
+    ubuntu-jammy:   libaprutil1-dbd-sqlite3 libaprutil1-ldap liblua5.3-0 mailcap mime-support
+    ubuntu-jammy:   ssl-cert
+    ubuntu-jammy: 0 upgraded, 12 newly installed, 0 to remove and 179 not upgraded.
+    ubuntu-jammy: Need to get 2,122 kB of archives.
+    ubuntu-jammy: After this operation, 8,450 kB of additional disk space will be used.
+    ubuntu-jammy: Get:1 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 libapr1 amd64 1.7.0-8ubuntu0.22.04.2 [108 kB]
+    ubuntu-jammy: Get:2 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 libaprutil1 amd64 1.6.1-5ubuntu4.22.04.3 [93.4 kB]
+    ubuntu-jammy: Get:3 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 libaprutil1-dbd-sqlite3 amd64 1.6.1-5ubuntu4.22.04.3 [11.4 kB]
+    ubuntu-jammy: Get:4 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 libaprutil1-ldap amd64 1.6.1-5ubuntu4.22.04.3 [9,164 B]
+    ubuntu-jammy: Get:5 http://us.archive.ubuntu.com/ubuntu jammy/main amd64 liblua5.3-0 amd64 5.3.6-1build1 [140 kB]
+    ubuntu-jammy: Get:6 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 apache2-bin amd64 2.4.52-1ubuntu4.23 [1,362 kB]
+    ubuntu-jammy: Get:7 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 apache2-data all 2.4.52-1ubuntu4.23 [165 kB]
+    ubuntu-jammy: Get:8 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 apache2-utils amd64 2.4.52-1ubuntu4.23 [90.1 kB]
+    ubuntu-jammy: Get:9 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 mailcap all 3.70+nmu1ubuntu1.22.04.1 [23.9 kB]
+    ubuntu-jammy: Get:10 http://us.archive.ubuntu.com/ubuntu jammy/main amd64 mime-support all 3.66 [3,696 B]
+    ubuntu-jammy: Get:11 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 apache2 amd64 2.4.52-1ubuntu4.23 [97.9 kB]
+    ubuntu-jammy: Get:12 http://us.archive.ubuntu.com/ubuntu jammy/main amd64 ssl-cert all 1.1.2 [17.4 kB]
+    ubuntu-jammy: dpkg-preconfigure: unable to re-open stdin: No such file or directory
+    ubuntu-jammy: Fetched 2,122 kB in 2s (1,044 kB/s)
+    ubuntu-jammy: Selecting previously unselected package libapr1:amd64.
+(Reading database ... 45823 files and directories currently installed.)
+    ubuntu-jammy: Preparing to unpack .../00-libapr1_1.7.0-8ubuntu0.22.04.2_amd64.deb ...
+    ubuntu-jammy: Unpacking libapr1:amd64 (1.7.0-8ubuntu0.22.04.2) ...
+    ubuntu-jammy: Selecting previously unselected package libaprutil1:amd64.
+    ubuntu-jammy: Preparing to unpack .../01-libaprutil1_1.6.1-5ubuntu4.22.04.3_amd64.deb ...
+    ubuntu-jammy: Unpacking libaprutil1:amd64 (1.6.1-5ubuntu4.22.04.3) ...
+    ubuntu-jammy: Selecting previously unselected package libaprutil1-dbd-sqlite3:amd64.
+    ubuntu-jammy: Preparing to unpack .../02-libaprutil1-dbd-sqlite3_1.6.1-5ubuntu4.22.04.3_amd64.deb ...
+    ubuntu-jammy: Unpacking libaprutil1-dbd-sqlite3:amd64 (1.6.1-5ubuntu4.22.04.3) ...
+    ubuntu-jammy: Selecting previously unselected package libaprutil1-ldap:amd64.
+    ubuntu-jammy: Preparing to unpack .../03-libaprutil1-ldap_1.6.1-5ubuntu4.22.04.3_amd64.deb ...
+    ubuntu-jammy: Unpacking libaprutil1-ldap:amd64 (1.6.1-5ubuntu4.22.04.3) ...
+    ubuntu-jammy: Selecting previously unselected package liblua5.3-0:amd64.
+    ubuntu-jammy: Preparing to unpack .../04-liblua5.3-0_5.3.6-1build1_amd64.deb ...
+    ubuntu-jammy: Unpacking liblua5.3-0:amd64 (5.3.6-1build1) ...
+    ubuntu-jammy: Selecting previously unselected package apache2-bin.
+    ubuntu-jammy: Preparing to unpack .../05-apache2-bin_2.4.52-1ubuntu4.23_amd64.deb ...
+    ubuntu-jammy: Unpacking apache2-bin (2.4.52-1ubuntu4.23) ...
+    ubuntu-jammy: Selecting previously unselected package apache2-data.
+    ubuntu-jammy: Preparing to unpack .../06-apache2-data_2.4.52-1ubuntu4.23_all.deb ...
+    ubuntu-jammy: Unpacking apache2-data (2.4.52-1ubuntu4.23) ...
+    ubuntu-jammy: Selecting previously unselected package apache2-utils.
+    ubuntu-jammy: Preparing to unpack .../07-apache2-utils_2.4.52-1ubuntu4.23_amd64.deb ...
+    ubuntu-jammy: Unpacking apache2-utils (2.4.52-1ubuntu4.23) ...
+    ubuntu-jammy: Selecting previously unselected package mailcap.
+    ubuntu-jammy: Preparing to unpack .../08-mailcap_3.70+nmu1ubuntu1.22.04.1_all.deb ...
+    ubuntu-jammy: Unpacking mailcap (3.70+nmu1ubuntu1.22.04.1) ...
+    ubuntu-jammy: Selecting previously unselected package mime-support.
+    ubuntu-jammy: Preparing to unpack .../09-mime-support_3.66_all.deb ...
+    ubuntu-jammy: Unpacking mime-support (3.66) ...
+    ubuntu-jammy: Selecting previously unselected package apache2.
+    ubuntu-jammy: Preparing to unpack .../10-apache2_2.4.52-1ubuntu4.23_amd64.deb ...
+    ubuntu-jammy: Unpacking apache2 (2.4.52-1ubuntu4.23) ...
+    ubuntu-jammy: Selecting previously unselected package ssl-cert.
+    ubuntu-jammy: Preparing to unpack .../11-ssl-cert_1.1.2_all.deb ...
+    ubuntu-jammy: Unpacking ssl-cert (1.1.2) ...
+    ubuntu-jammy: Setting up libapr1:amd64 (1.7.0-8ubuntu0.22.04.2) ...
+    ubuntu-jammy: Setting up ssl-cert (1.1.2) ...
+    ubuntu-jammy: Setting up liblua5.3-0:amd64 (5.3.6-1build1) ...
+    ubuntu-jammy: Setting up apache2-data (2.4.52-1ubuntu4.23) ...
+    ubuntu-jammy: Setting up mailcap (3.70+nmu1ubuntu1.22.04.1) ...
+    ubuntu-jammy: Setting up libaprutil1:amd64 (1.6.1-5ubuntu4.22.04.3) ...
+    ubuntu-jammy: Setting up mime-support (3.66) ...
+    ubuntu-jammy: Setting up libaprutil1-ldap:amd64 (1.6.1-5ubuntu4.22.04.3) ...
+    ubuntu-jammy: Setting up libaprutil1-dbd-sqlite3:amd64 (1.6.1-5ubuntu4.22.04.3) ...
+    ubuntu-jammy: Setting up apache2-utils (2.4.52-1ubuntu4.23) ...
+    ubuntu-jammy: Setting up apache2-bin (2.4.52-1ubuntu4.23) ...
+    ubuntu-jammy: Setting up apache2 (2.4.52-1ubuntu4.23) ...
+    ubuntu-jammy: Enabling module mpm_event.
+    ubuntu-jammy: Enabling module authz_core.
+    ubuntu-jammy: Enabling module authz_host.
+    ubuntu-jammy: Enabling module authn_core.
+    ubuntu-jammy: Enabling module auth_basic.
+    ubuntu-jammy: Enabling module access_compat.
+    ubuntu-jammy: Enabling module authn_file.
+    ubuntu-jammy: Enabling module authz_user.
+    ubuntu-jammy: Enabling module alias.
+    ubuntu-jammy: Enabling module dir.
+    ubuntu-jammy: Enabling module autoindex.
+    ubuntu-jammy: Enabling module env.
+    ubuntu-jammy: Enabling module mime.
+    ubuntu-jammy: Enabling module negotiation.
+    ubuntu-jammy: Enabling module setenvif.
+    ubuntu-jammy: Enabling module filter.
+    ubuntu-jammy: Enabling module deflate.
+    ubuntu-jammy: Enabling module status.
+    ubuntu-jammy: Enabling module reqtimeout.
+    ubuntu-jammy: Enabling conf charset.
+    ubuntu-jammy: Enabling conf localized-error-pages.
+    ubuntu-jammy: Enabling conf other-vhosts-access-log.
+    ubuntu-jammy: Enabling conf security.
+    ubuntu-jammy: Enabling conf serve-cgi-bin.
+    ubuntu-jammy: Enabling site 000-default.
+    ubuntu-jammy: Created symlink /etc/systemd/system/multi-user.target.wants/apache2.service → /lib/systemd/system/apache2.service.
+    ubuntu-jammy: Created symlink /etc/systemd/system/multi-user.target.wants/apache-htcacheclean.service → /lib/systemd/system/apache-htcacheclean.service.
+    ubuntu-jammy: Processing triggers for ufw (0.36.1-4ubuntu0.1) ...
+    ubuntu-jammy: Processing triggers for man-db (2.10.2-1) ...
+    ubuntu-jammy: Processing triggers for libc-bin (2.35-0ubuntu3.11) ...
+    ubuntu-jammy: 
+    ubuntu-jammy: Running kernel seems to be up-to-date.
+    ubuntu-jammy: 
+    ubuntu-jammy: No services need to be restarted.
+    ubuntu-jammy: 
+    ubuntu-jammy: No containers need to be restarted.
+    ubuntu-jammy: 
+    ubuntu-jammy: No user sessions are running outdated binaries.
+    ubuntu-jammy: 
+    ubuntu-jammy: No VM guests are running outdated hypervisor (qemu) binaries on this host.
+    ubuntu-jammy: Site 000-default disabled.
+    ubuntu-jammy: To activate the new configuration, you need to run:
+    ubuntu-jammy:   systemctl reload apache2
+    ubuntu-jammy: <VirtualHost *:80>
+    ubuntu-jammy:           DocumentRoot /vagrant
+    ubuntu-jammy:           <Directory /vagrant>
+    ubuntu-jammy:               Options Indexes FollowSymLinks
+    ubuntu-jammy:               AllowOverride All
+    ubuntu-jammy:               Require all granted
+    ubuntu-jammy:           </Directory>
+    ubuntu-jammy:       </VirtualHost>
+    ubuntu-jammy: Enabling site vagrant.
+    ubuntu-jammy: To activate the new configuration, you need to run:
+    ubuntu-jammy:   systemctl reload apache2
+    ubuntu-jammy: Enabling module rewrite.
+    ubuntu-jammy: To activate the new configuration, you need to run:
+    ubuntu-jammy:   systemctl restart apache2
+[admin_insta11@mv334 vagrant-provisioning-net-disks]$
+```
+
+Подключаемся к созданной ВМ, проверяем, что созданные диски видны и примонтированы, пробуем записать на них
+файлы:
+
+```
+[admin_insta11@mv334 vagrant-provisioning-net-disks]$vagrant ssh
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Sep 15 03:12:04 AM UTC 2026
+
+  System load:           0.69
+  Usage of /:            16.0% of 30.34GB
+  Memory usage:          13%
+  Swap usage:            0%
+  Processes:             178
+  Users logged in:       0
+  IPv4 address for eth0: 10.0.2.15
+  IPv6 address for eth0: fd17:625c:f037:2:a00:27ff:fe16:ddef
+
+
+This system is built by the Bento project by Chef Software
+More information can be found at https://github.com/chef/bento
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ df -h
+Filesystem                         Size  Used Avail Use% Mounted on
+tmpfs                              197M  1.1M  196M   1% /run
+/dev/mapper/ubuntu--vg-ubuntu--lv   31G  4.9G   24G  17% /
+tmpfs                              982M     0  982M   0% /dev/shm
+tmpfs                              5.0M     0  5.0M   0% /run/lock
+/dev/sda2                          2.0G  131M  1.7G   8% /boot
+vagrant                            156G   73G   83G  47% /vagrant
+/dev/sdb1                          988M   24K  921M   1% /mnt/disk1
+/dev/sdc1                          988M   24K  921M   1% /mnt/disk2
+tmpfs                              197M  8.0K  197M   1% /run/user/1000
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ cat /etc/fstab
+# /etc/fstab: static file system information.
+#
+# Use 'blkid' to print the universally unique identifier for a
+# device; this may be used with UUID= as a more robust way to name devices
+# that works even if disks are added and removed. See fstab(5).
+#
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+# / was on /dev/ubuntu-vg/ubuntu-lv during curtin installation
+/dev/disk/by-id/dm-uuid-LVM-hdIJZMcW0IiMN1hQHlkwKD0xgeiosdmVgJCojKJgdu3kkOKNQrAupoLdBCNFiEq3 / ext4 defaults 0 1
+# /boot was on /dev/sda2 during curtin installation
+/dev/disk/by-uuid/178463a5-df75-4611-b948-da0107e9a453 /boot ext4 defaults 0 1
+/swap.img	none	swap	sw	0	0
+#VAGRANT-BEGIN
+# The contents below are automatically generated by Vagrant. Do not modify.
+vagrant /vagrant vboxsf uid=1000,gid=1000,_netdev 0 0
+#VAGRANT-END
+UUID=04642414-fdd4-4b23-adc4-043c97c984c2  /mnt/disk1  ext4  defaults,noatime,nodiratime  0  2
+UUID=8ac5aa8d-6c28-470f-b6d3-b8c56fb6bbf3  /mnt/disk2  ext4  defaults,noatime,nodiratime  0  2
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ lsblk -f
+NAME                      FSTYPE      FSVER    LABEL UUID                                   FSAVAIL FSUSE% MOUNTPOINTS
+loop0                     squashfs    4.0                                                         0   100% /snap/snapd/21759
+loop1                     squashfs    4.0                                                         0   100% /snap/core20/2318
+loop2                     squashfs    4.0                                                         0   100% /snap/lxd/29351
+sda                                                                                                        
+├─sda1                                                                                                     
+├─sda2                    ext4        1.0            178463a5-df75-4611-b948-da0107e9a453      1.7G     7% /boot
+└─sda3                    LVM2_member LVM2 001       KoqZIv-vJYX-UvDz-fqWI-m0Yh-3WFS-NVAXYa                
+  └─ubuntu--vg-ubuntu--lv ext4        1.0            40082512-a418-449c-8972-691f1ae551cb     23.9G    16% /
+sdb                                                                                                        
+└─sdb1                    ext4        1.0            04642414-fdd4-4b23-adc4-043c97c984c2    920.3M     0% /mnt/disk1
+sdc                                                                                                        
+└─sdc1                    ext4        1.0            8ac5aa8d-6c28-470f-b6d3-b8c56fb6bbf3    920.3M     0% /mnt/disk2
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ cat > /mnt/disk1/test1.txt
+This is a test file on disk #1
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ cat > /mnt/disk2/test2.txt
+This is a test file on disk #2
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ cat /mnt/disk1/test1.txt
+This is a test file on disk #1
+vagrant@vagrant:~$ cat /mnt/disk2/test2.txt
+This is a test file on disk #2
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ exit
+logout
+[admin_insta11@mv334 vagrant-provisioning-net-disks]$
+```
+
+Также работает проброс порта и синхронизация с внешней директорией, на хосте открывается страница сконфигурированного в ВМ WEB-сервера:
+
+<img width="1073" height="1047" alt="изображение" src="https://github.com/user-attachments/assets/f20eb3ad-19b2-4842-92fc-de81c62dd676" />
+
+При изменении  на хосте файла index.html в директории /home/admin_insta11/vagrant-provisioning-net-disks страница в WEB-броузере также меняется.
+
+Для проверки перезагружаем ВМ, после перезагрузки диски по-прежнему примонтированы, записанные на них файлы сохранились:
+
+```
+[admin_insta11@mv334 vagrant-provisioning-net-disks]$ vagrant halt
+==> ubuntu-jammy: Attempting graceful shutdown of VM...
+[admin_insta11@mv334 vagrant-provisioning-net-disks]$ 
+[admin_insta11@mv334 vagrant-provisioning-net-disks]$ 
+[admin_insta11@mv334 vagrant-provisioning-net-disks]$ vagrant up
+Bringing machine 'ubuntu-jammy' up with 'virtualbox' provider...
+==> ubuntu-jammy: Clearing any previously set forwarded ports...
+==> ubuntu-jammy: Clearing any previously set network interfaces...
+==> ubuntu-jammy: Preparing network interfaces based on configuration...
+    ubuntu-jammy: Adapter 1: nat
+    ubuntu-jammy: Adapter 2: intnet
+==> ubuntu-jammy: Forwarding ports...
+    ubuntu-jammy: 80 (guest) => 8080 (host) (adapter 1)
+    ubuntu-jammy: 22 (guest) => 2222 (host) (adapter 1)
+==> ubuntu-jammy: Configuring storage mediums...
+==> ubuntu-jammy: Running 'pre-boot' VM customizations...
+==> ubuntu-jammy: Booting VM...
+==> ubuntu-jammy: Waiting for machine to boot. This may take a few minutes...
+    ubuntu-jammy: SSH address: 127.0.0.1:2222
+    ubuntu-jammy: SSH username: vagrant
+    ubuntu-jammy: SSH auth method: private key
+    ubuntu-jammy: Warning: Connection reset. Retrying...
+    ubuntu-jammy: Warning: Remote connection disconnect. Retrying...
+    ubuntu-jammy: Warning: Connection reset. Retrying...
+==> ubuntu-jammy: Machine booted and ready!
+==> ubuntu-jammy: Checking for guest additions in VM...
+    ubuntu-jammy: The guest additions on this VM do not match the installed version of
+    ubuntu-jammy: VirtualBox! In most cases this is fine, but in rare cases it can
+    ubuntu-jammy: prevent things such as shared folders from working properly. If you see
+    ubuntu-jammy: shared folder errors, please make sure the guest additions within the
+    ubuntu-jammy: virtual machine match the version of VirtualBox you have installed on
+    ubuntu-jammy: your host and reload your VM.
+    ubuntu-jammy: 
+    ubuntu-jammy: Guest Additions Version: 7.2.4
+    ubuntu-jammy: VirtualBox Version: 7.1
+==> ubuntu-jammy: Configuring and enabling network interfaces...
+==> ubuntu-jammy: Mounting shared folders...
+    ubuntu-jammy: /home/admin_insta11/network-storage-provisioning => /vagrant
+==> ubuntu-jammy: Machine already provisioned. Run `vagrant provision` or use the `--provision`
+==> ubuntu-jammy: flag to force provisioning. Provisioners marked to run always will still run.
+[admin_insta11@mv334 network-storage-provisioning]$ vagrant ssh
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Sep 15 03:47:07 AM UTC 2026
+
+  System load:           0.02
+  Usage of /:            16.7% of 30.34GB
+  Memory usage:          12%
+  Swap usage:            0%
+  Processes:             163
+  Users logged in:       0
+  IPv4 address for eth0: 10.0.2.15
+  IPv6 address for eth0: fd17:625c:f037:2:a00:27ff:fe16:ddef
+
+
+This system is built by the Bento project by Chef Software
+More information can be found at https://github.com/chef/bento
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Tue Sep 15 03:12:04 2026 from 10.0.2.2
+vagrant@vagrant:~$ df -h
+Filesystem                         Size  Used Avail Use% Mounted on
+tmpfs                              197M  1.1M  196M   1% /run
+/dev/mapper/ubuntu--vg-ubuntu--lv   31G  5.1G   24G  18% /
+tmpfs                              982M     0  982M   0% /dev/shm
+tmpfs                              5.0M     0  5.0M   0% /run/lock
+/dev/sda2                          2.0G  131M  1.7G   8% /boot
+/dev/sdc1                          988M   28K  921M   1% /mnt/disk2
+/dev/sdb1                          988M   28K  921M   1% /mnt/disk1
+vagrant                            156G   74G   83G  47% /vagrant
+tmpfs                              197M  8.0K  197M   1% /run/user/1000
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ cat /mnt/disk1/test1.txt
+This is a test file on disk #1
+vagrant@vagrant:~$ cat /mnt/disk2/test2.txt
+This is a test file on disk #2
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ 
+vagrant@vagrant:~$ exit
+logout
+[admin_insta11@mv334 vagrant-provisioning-net-disks]$ vagrant halt
+==> ubuntu-jammy: Attempting graceful shutdown of VM...
+[admin_insta11@mv334 vagrant-provisioning-net-disks]$
+```
 
 
 # КОНЕЦ
 
-### Далее приведены общие подходы и рекомендации по работе с гипервизорами libvrt/kvm и virtualbox , в том числе при совместной работе с vagrant. Приведённый ниже материал не относится непосредственно к данной лабораторной работе.
+### Далее приведены общие подходы и полученные результаты по работе с гипервизорами libvirt/kvm и virtualbox , в том числе при совместной работе с vagrant. Приведённый ниже материал не относится непосредственно к данной лабораторной работе, хотя все результаты были получены в процессе выполнения данной лабораторной работы. Изучено различие построения сетей гипервизоров libvirt/kvm и virtualbox.
 
 В Host OS REDOS 7.3 более нативным является гипервизор KVM (основан на libvirt, содержащемся в ядре Linux), поэтому также проверяем вариант установки и работы KVM + Vagrant .
 Для работы Vagrant с KVM требуется установка и сборка плагина vagrant-libvirt
