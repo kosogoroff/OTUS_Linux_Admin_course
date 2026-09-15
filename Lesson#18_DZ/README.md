@@ -55,6 +55,199 @@
 
 # Решение
 
+Также в связи с недоступностью портала https://portal.cloud.hashicorp.com/ для проверки и работы заранее локально скачаны несколько Vagrant box для различных версий Linux:
+
+```
+[admin_insta11@mv334 lab-almalinux9]$ ls -l /distrib/vagrant_boxes/
+итого 8408428
+-rwxrwxrwx 1 admin_insta11 admin_insta11  546709438 авг 31 21:50  almalinux-9-9.8.20260810-amd64-libvirt.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11  698021674 авг 31 22:18  almalinux-9-9.8.20260810-amd64-virtualbox.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11  838235264 сен  1 06:22  bento-ubuntu-22.04-202510.26.0-amd64-virtualbox.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11 3216132560 авг 31 23:48  bento-ubuntu-26.04-202606.01.0-amd64-libvirt.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11 3311076684 сен  1 06:00  bento-ubuntu-26.04-202606.01.0-amd64-virtualbox.box
+[admin_insta11@mv334 lab-almalinux9]$
+```
+
+1.2.2 Создаём директорию для нового проекта и создаём в ней Vagrantfile
+
+Исходный рабочий Vagrantfile из примера, продемонстрированного на занятии, по ссылке https://github.com/pcade/vagrant-examples/tree/main/network-storage-provisioning следующего содержания:
+
+```
+Vagrant.configure("2") do |config|
+  # Ubuntu Jammy
+  config.vm.define "ubuntu-jammy" do |srv|
+    srv.vm.box = "ubuntu/jammy64"
+    srv.vm.provider "virtualbox" do |vb|
+      vb.memory = 2048
+      vb.cpus = 2
+      vb.name = "ubuntu-jammy-vm"
+      vb.customize ['modifyvm', :id, '--audio', 'none']
+    end
+
+    # Синхронизация папок
+    srv.vm.synced_folder "./", "/vagrant"
+
+    # Подключение диска
+    srv.vm.disk :disk, size: "1GB", name: "disk1"
+
+    # Проброс порта для HTTP (будет доступен по localhost:8080)
+    srv.vm.network(:forwarded_port,
+                    guest: 80,
+                    host: 8080,
+                    host_ip: "127.0.0.1")
+
+    # Приватная сеть в той же подсети, что и virbr0 на хосте (192.168.122.0/24)
+    srv.vm.network(:private_network,
+                   ip: "192.168.56.11",
+                   libvirt__network_name: "default",  # Это для Libvirt, но для VirtualBox просто укажите IP
+                   auto_config: true)
+
+    # Provisioning - установка Apache
+    srv.vm.provision "shell", inline: <<-SHELL
+      # Обновление пакетов
+      sudo apt-get update
+      
+      # Установка Apache
+      sudo apt-get install -y apache2
+      
+      # Отключаем стандартную папку /var/www/html
+      sudo a2dissite 000-default.conf
+      
+      # Создаем конфигурацию для нашего сайта
+      echo "<VirtualHost *:80>
+          DocumentRoot /vagrant
+          <Directory /vagrant>
+              Options Indexes FollowSymLinks
+              AllowOverride All
+              Require all granted
+          </Directory>
+      </VirtualHost>" | sudo tee /etc/apache2/sites-available/vagrant.conf
+      
+      # Включаем наш сайт
+      sudo a2ensite vagrant.conf
+      
+      # Включение mod_rewrite
+      sudo a2enmod rewrite
+      
+      # Перезапуск Apache
+      sudo systemctl restart apache2
+    SHELL
+  end
+end
+```
+
+Но данный файл создан для работы с virtualbox, поэтому для использования с KVM в нём нужно сделать несколько изменений:
+Нужно поменять три вещи: провайдер, сеть и источник бокса.
+
+Также в связи с недоступностью портала https://portal.cloud.hashicorp.com/ для проверки и работы заранее локально скачаны несколько Vagrant box для различных версий Linux, для создания ВМ будем использовать локально скачаные и установленные боксы. Модифицированный Vagrantfile приведён ниже:
+
+```
+# Имя бокса можно переопределить через переменную окружения:
+#   VAGRANT_BOX=almalinux9-stand vagrant up --provider=libvirt
+BOX_NAME = ENV['VAGRANT_BOX'] || 'ubuntu-jammy'
+
+Vagrant.configure("2") do |config|
+  # Ubuntu Jammy
+  config.vm.define "ubuntu-jammy" do |srv|
+    srv.vm.box = BOX_NAME
+
+    srv.vm.provider "virtualbox" do |vb|
+      vb.memory = 2048
+      vb.cpus = 2
+      vb.name = "ubuntu-vm"
+      vb.customize ['modifyvm', :id, '--audio', 'none']
+    end
+
+    srv.vm.provider "libvirt" do |vb|
+      vb.memory = 2048
+      vb.cpus = 2
+      vb.name = "ubuntu-vm"
+      vb.customize ['modifyvm', :id, '--audio', 'none']
+    end
+
+    # Синхронизация папок
+    srv.vm.synced_folder "./", "/vagrant"
+
+    # Подключение диска
+    srv.vm.disk :disk, size: "1GB", name: "disk1"
+    srv.vm.disk :disk, size: "1GB", name: "disk2"
+
+    # Проброс порта для HTTP (будет доступен по localhost:8080)
+    srv.vm.network(:forwarded_port,
+                    guest: 80,
+                    host: 8080,
+                    host_ip: "127.0.0.1")
+
+    # Приватная сеть в той же подсети, что и virbr0 на хосте (192.168.122.0/24)
+    srv.vm.network(:private_network,
+                   ip: "192.168.56.11",
+                   virtualbox__intnet: "dns",
+                   libvirt__network_name: "dns",
+                   libvirt__host_ip: "192.168.56.1",
+                   libvirt__netmask: "255.255.255.0",
+                   auto_config: true)
+
+    # Provisioning - установка Apache
+    srv.vm.provision "shell", inline: <<-SHELL
+
+      # монтирование двух созданных дисков по 1Gb
+      sudo parted -s /dev/sdb mklabel gpt mkpart primary 1MiB 100%
+      sudo mkfs.ext4 -F /dev/sdb1
+      sudo mkdir -p /mnt/disk1
+      UUID=$(sudo blkid -s UUID -o value /dev/sdb1)
+      sudo umount /mnt/disk1
+      sudo mount UUID=$UUID /mnt/disk1
+      sudo chmod -R 0777 /mnt/disk1
+      sudo sed -i "/\/mnt\/disk1/d" /etc/fstab
+      sudo echo "UUID=$UUID  \/mnt\/disk1  ext4  defaults,noatime,nodiratime  0  2" >> /etc/fstab
+
+      sudo parted -s /dev/sdc mklabel gpt mkpart primary 1MiB 100%
+      sudo mkfs.ext4 -F /dev/sdc1
+      sudo mkdir -p /mnt/disk2
+      UUID=$(sudo blkid -s UUID -o value /dev/sdc1)
+      sudo umount /mnt/disk2
+      sudo mount UUID=$UUID /mnt/disk2
+      sudo chmod -R 0777 /mnt/disk2
+      sudo sed -i "/\/mnt\/disk2/d" /etc/fstab
+      sudo echo "UUID=$UUID  \/mnt\/disk2  ext4  defaults,noatime,nodiratime  0  2" >> /etc/fstab
+
+      # Обновление пакетов
+      sudo apt-get update
+      
+      # Установка Apache
+      sudo apt-get install -y apache2
+      
+      # Отключаем стандартную папку /var/www/html
+      sudo a2dissite 000-default.conf
+      
+      # Создаем конфигурацию для нашего сайта
+      echo "<VirtualHost *:80>
+          DocumentRoot /vagrant
+          <Directory /vagrant>
+              Options Indexes FollowSymLinks
+              AllowOverride All
+              Require all granted
+          </Directory>
+      </VirtualHost>" | sudo tee /etc/apache2/sites-available/vagrant.conf
+      
+      # Включаем наш сайт
+      sudo a2ensite vagrant.conf
+      
+      # Включение mod_rewrite
+      sudo a2enmod rewrite
+      
+      # Перезапуск Apache
+      sudo systemctl restart apache2
+    SHELL
+  end
+end
+```
+
+
+
+# КОНЕЦ
+
+### Далее приведены общие подходы и рекомендации по работе с гипервизорами libvrt/kvm и virtualbox , в том числе при совместной работе с vagrant. Приведённый ниже материал не относится непосредственно к данной лабораторной работе.
 
 В Host OS REDOS 7.3 более нативным является гипервизор KVM (основан на libvirt, содержащемся в ядре Linux), поэтому также проверяем вариант установки и работы KVM + Vagrant .
 Для работы Vagrant с KVM требуется установка и сборка плагина vagrant-libvirt
