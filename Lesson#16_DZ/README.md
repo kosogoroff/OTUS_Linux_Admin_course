@@ -23,6 +23,28 @@
 
 ### 1. Создание конфигурирование ВМ, первоначальное конфигурирование доступа средствами vagrant
 
+По ссылке https://github.com/kosogoroff/ansible_lab.git выложен работающий репозиторий с выполненным домашним заданием.
+
+Полный состав лабораторного проекта:
+
+```
+[admin_insta11@mv334 ~]$ tree ansible_lab
+ansible_lab
+├── ansible.cfg
+├── gen_ansible_inventory.sh
+├── nginx.yml
+├── staging
+│   └── hosts
+├── templates
+│   └── nginx.conf.j2
+└── Vagrantfile
+
+2 directories, 6 files
+
+```
+
+### Описание 
+
 В связи с недоступностью портала https://portal.cloud.hashicorp.com/  и vagrantcloud для проверки и работы заранее локально скачаны несколько Vagrant box для различных версий Linux:
 
 ```
