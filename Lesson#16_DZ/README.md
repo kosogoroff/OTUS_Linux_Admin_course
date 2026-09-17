@@ -254,3 +254,50 @@ Domain 'ubuntu-24.04-01' is being shutdown
 [admin_insta11@mv334 ansible_lab]$ sudo systemctl start libvirtd.service
 [admin_insta11@mv334 ansible_lab]$
 ```
+
+После создания виртуальной машины для автоматической генерации файла инвентаря предлагается однократно запустить вспомогательный скрипт , который генерирует файл инвентаря для ansible на основе данных 'vagrant ssh-config' для конкретной ВМ (при работе с разными гипервизорами это необходимо, так как построение сетей в них отличаются, поэтому данные подключений отличаются). Вспомогательный скрипт gen_ansible_inventory.sh выглядит следующим образом:
+
+```
+#!/bin/bash
+# gen_inventory.sh — генерирует инвентарь из vagrant ssh-config
+
+PROVIDER="${VAGRANT_DEFAULT_PROVIDER:-virtualbox}"
+HOSTS_FILE="./staging/hosts"
+
+# Получаем SSH-конфиг для всех машин
+SSH_CONFIG=$(vagrant ssh-config nginx 2>/dev/null)
+
+# Парсим нужные поля
+HOST=$(echo "$SSH_CONFIG" | grep -i 'HostName' | awk '{print $2}')
+PORT=$(echo "$SSH_CONFIG" | grep -i 'Port' | awk '{print $2}')
+KEY=$(echo "$SSH_CONFIG" | grep -i 'IdentityFile' | awk '{print $2}' | sed 's/"//g')
+
+cat > "$HOSTS_FILE" <<EOF
+[web]
+nginx ansible_host=${HOST} ansible_port=${PORT} ansible_user=vagrant ansible_private_key_file=${KEY}
+EOF
+
+echo "Inventory generated:"
+cat "$HOSTS_FILE"
+```
+
+Скрипт gen_ansible_inventory.sh необходимо запустить после создания ВМ для быстрого создания файла инвентаря для ansible - после этого файл инвентаря правильно формируется,
+и после этого ansible успешно подключается к ВМ:
+
+```
+[admin_insta11@mv334 ansible_lab]$ ./gen_ansible_inventory.sh
+Inventory generated:
+[web]
+nginx ansible_host=127.0.0.1 ansible_port=2222 ansible_user=vagrant ansible_private_key_file=/home/admin_insta11/ansible_lab/.vagrant/machines/nginx/virtualbox/private_key
+[admin_insta11@mv334 ansible_lab]$ 
+[admin_insta11@mv334 ansible_lab]$ ansible nginx -i ./staging/hosts -m ping
+nginx | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/bin/python3"
+    },
+    "changed": false,
+    "ping": "pong"
+}
+[admin_insta11@mv334 ansible_lab]$ 
+```
+
