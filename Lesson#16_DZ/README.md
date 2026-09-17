@@ -151,14 +151,22 @@ Vagrant.configure("2") do |config|
         end
       end
 
-      # --- Сеть: private_network ---
+      # --- Сеть: private_network (по-разному для провайдеров) ---
       boxconfig[:net].each do |ipconf|
-        box.vm.network("private_network",
-          ip: ipconf[0],
-          adapter: ipconf[1],
-          netmask: ipconf[2],
-          virtualbox__intnet: ipconf[3]
-        )
+        if PROVIDER == "libvirt"
+          box.vm.network("private_network",
+            ip: ipconf[0],
+            netmask: ipconf[2],
+            libvirt__network_name: ipconf[3]
+          )
+        else
+          box.vm.network("private_network",
+            ip: ipconf[0],
+            adapter: ipconf[1],
+            netmask: ipconf[2],
+            virtualbox__intnet: ipconf[3]
+          )
+        end
       end
 
       if boxconfig.key?(:public)
