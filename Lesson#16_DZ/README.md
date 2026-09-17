@@ -223,3 +223,26 @@ VAGRANT_BOX=almalinux9-stand-vb vagrant up
 ```
 
 Также иходный и модифицированный Vagrantfile рассчитаны на создание нескольких ВМ - каждую ВМ можно индивидуально описывать в массиве MACHINES.
+
+**Примечание:** если на хосте установлено два гипервизора libvirt/kvm и virtualbox одновременно, то для запуска виртуальных машин в гипервизоре virtualbox необходимо сначала остановить все виртуальные машины, запущенные в гипервизоре libvirt/kvm, остановить гипервизор libvirt/kvm и выгрузить драйвера ядра гипервизор libvirt/kvm:
+
+```
+[admin_insta11@mv334 ansible_lab]$ sudo bash -c 'for vm in $(virsh list --name); do virsh shutdown "$vm"; done'
+Domain 'ubuntu-24.04-01' is being shutdown
+
+[admin_insta11@mv334 ansible_lab]$
+[admin_insta11@mv334 ansible_lab]$ sudo systemctl stop libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket libvirtd.service
+[sudo] пароль для admin_insta11: 
+[admin_insta11@mv334 ansible_lab]$ 
+[admin_insta11@mv334 ansible_lab]$ sudo modprobe -r kvm_intel
+[admin_insta11@mv334 ansible_lab]$ 
+```
+
+Для запуска виртуальных машин в гипервизоре libvirt/kvm необходимо остановить все запущенные в гипервизоре virtualbox виртуальные машины (сервис и драйвера virtualbox останавливать не нужно), загрузить драйвера ядра и запустить сервис libvrt:
+
+```
+[admin_insta11@mv334 ansible_lab]$ sudo modprobe kvm_intel
+[admin_insta11@mv334 ansible_lab]$
+[admin_insta11@mv334 ansible_lab]$ sudo systemctl start libvirtd.service
+[admin_insta11@mv334 ansible_lab]$
+```
