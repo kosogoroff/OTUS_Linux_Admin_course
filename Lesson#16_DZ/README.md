@@ -21,3 +21,205 @@
 
 # Решение
 
+В связи с недоступностью портала https://portal.cloud.hashicorp.com/ для проверки и работы заранее локально скачаны несколько Vagrant box для различных версий Linux:
+
+```
+[admin_insta11@mv334 lab-almalinux9]$ ls -l /distrib/vagrant_boxes/
+итого 8408428
+-rwxrwxrwx 1 admin_insta11 admin_insta11  546709438 авг 31 21:50  almalinux-9-9.8.20260810-amd64-libvirt.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11  698021674 авг 31 22:18  almalinux-9-9.8.20260810-amd64-virtualbox.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11  838235264 сен  1 06:22  bento-ubuntu-22.04-202510.26.0-amd64-virtualbox.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11 3216132560 авг 31 23:48  bento-ubuntu-26.04-202606.01.0-amd64-libvirt.box
+-rwxrwxrwx 1 admin_insta11 admin_insta11 3311076684 сен  1 06:00  bento-ubuntu-26.04-202606.01.0-amd64-virtualbox.box
+[admin_insta11@mv334 lab-almalinux9]$
+```
+
+Исходный файл Vagrantfile из лабораторной работы по ссылке https://drive.google.com/file/d/17MEtg20TFSjKil6ih7PvPez7jmCvo6fb/view?usp=share_link :
+
+```
+# -*- mode: ruby -*-
+# vim: set ft=ruby :
+
+MACHINES = {
+  :nginx => {
+        :box_name => "generic/ubuntu2204",
+        :vm_name => "nginx",
+        :net => [
+           ["192.168.11.150",  2, "255.255.255.0", "mynet"],
+        ]
+  }
+}
+
+Vagrant.configure("2") do |config|
+
+  MACHINES.each do |boxname, boxconfig|
+
+    config.vm.define boxname do |box|
+   
+      box.vm.box = boxconfig[:box_name]
+      box.vm.host_name = boxconfig[:vm_name]
+      
+      box.vm.provider "virtualbox" do |v|
+        v.memory = 768
+        v.cpus = 1
+       end
+
+      boxconfig[:net].each do |ipconf|
+        box.vm.network("private_network", ip: ipconf[0], adapter: ipconf[1], netmask: ipconf[2], virtualbox__intnet: ipconf[3])
+      end
+
+      if boxconfig.key?(:public)
+        box.vm.network "public_network", boxconfig[:public]
+      end
+
+      box.vm.provision "shell", inline: <<-SHELL
+        mkdir -p ~root/.ssh
+        cp ~vagrant/.ssh/auth* ~root/.ssh
+        sudo sed -i 's/\#PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+        systemctl restart sshd
+      SHELL
+    end
+  end
+end
+```
+
+Приведённый выше файл создан для работы с virtualbox и с боксом Ubuntu находящимся на vagrantcloud. Поэтому для использования с libvirt/KVM, а также с локально установленными боксами в нём нужно сделать несколько изменений:
+Нужно поменять три вещи: 
+
+- провайдер (virtualbox по умолчанию, либо vibvirt),
+
+- сеть (libvirt имеет другую организацию сети и не поддерживает проброс порта в том виде, как это делает virtualbox),
+
+- источник бокса (использовать удалённый бокс расположенный на Hashcorp vagrantcloud либо локально установленный бокс).
+
+Модифицированный Vagrantfile приведён ниже:
+
+```
+# -*- mode: ruby -*-
+# vim: set ft=ruby :
+
+# Провайдер из переменной окружения или virtualbox по умолчанию
+PROVIDER = ENV["VAGRANT_DEFAULT_PROVIDER"] || "virtualbox"
+
+# Имя бокса можно переопределить через переменную окружения:
+#   VAGRANT_BOX=almalinux9-stand vagrant up --provider=libvirt
+BOX_NAME = ENV['VAGRANT_BOX'] || 'generic/ubuntu2204'
+
+MACHINES = {
+  :nginx => {
+    :box_name => BOX_NAME,
+    :vm_name => "nginx",
+    :mem => 768,
+    :cpus => 1,
+    :net => [
+      ["192.168.11.150", 2, "255.255.255.0", "mynet"],
+    ]
+#  },
+#  :nginx2 => {
+#    :box_name => BOX_NAME,
+#    :vm_name => "nginx2",
+#    :mem => 768,
+#    :cpus => 1,
+#    :net => [
+#      ["192.168.11.151", 2, "255.255.255.0", "mynet"],
+#    ]
+  }
+}
+
+Vagrant.configure("2") do |config|
+
+  # Базовый порт для проброса (только VirtualBox)
+  host_port = 8080
+
+  MACHINES.each do |boxname, boxconfig|
+
+    config.vm.define boxname do |box|
+
+      box.vm.box = boxconfig[:box_name]
+      box.vm.host_name = boxconfig[:vm_name]
+
+      # --- Настройки провайдера ---
+      if PROVIDER == "libvirt"
+        box.vm.provider :libvirt do |lv|
+          lv.memory = boxconfig[:mem]
+          lv.cpus = boxconfig[:cpus]
+        end
+      else
+        box.vm.provider "virtualbox" do |v|
+          v.memory = boxconfig[:mem]
+          v.cpus = boxconfig[:cpus]
+        end
+      end
+
+      # --- Сеть: private_network ---
+      boxconfig[:net].each do |ipconf|
+        box.vm.network("private_network",
+          ip: ipconf[0],
+          adapter: ipconf[1],
+          netmask: ipconf[2],
+          virtualbox__intnet: ipconf[3]
+        )
+      end
+
+      if boxconfig.key?(:public)
+        box.vm.network "public_network", boxconfig[:public]
+      end
+
+      # --- Проброс портов (только VirtualBox) ---
+      if PROVIDER == "virtualbox"
+        box.vm.network :forwarded_port,
+          guest: 80,
+          host: host_port,
+          host_ip: "127.0.0.1"
+        host_port += 1
+      end
+
+      # --- Провижн ---
+      box.vm.provision "shell", inline: <<-SHELL
+        mkdir -p ~root/.ssh
+        cp ~vagrant/.ssh/auth* ~root/.ssh 2>/dev/null || true
+        sudo sed -i 's/#PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+        systemctl restart sshd
+      SHELL
+    end
+  end
+end
+```
+
+Данный модифицированный Vagrantfile допускает следующее использование:
+
+1) Для создания ВМ в гипервизоре virtualbox с использованием бокса generic/ubuntu2204 на vagrantcloud нужно запустить командой
+
+```
+vagrant up
+```
+
+Если боксы установлены на компьютере локально, например:
+
+```
+[admin_insta11@mv334 network-storage-provisioning]$ vagrant box list
+almalinux9-stand        (libvirt, 0)
+almalinux9-stand-vb     (virtualbox, 0)
+ubuntu-22.04-virtualbox (virtualbox, 0)
+[admin_insta11@mv334 network-storage-provisioning]$ 
+```
+
+2) Для создания ВМ в гипервизоре libvirt/kvm с использованием локально установленного бокса almalinux/9 нужно запустить командой (в данной лабораторной нам вариант с Almalinux не нужен, приведён справочно)
+
+```
+VAGRANT_BOX=almalinux9-stand VAGRANT_DEFAULT_PROVIDER=libvirt vagrant up --provider=libvirt
+```
+
+3) Для создания ВМ в гипервизоре virtualbox с использованием локально установленного бокса almalinux/9 нужно запустить командой
+
+```
+VAGRANT_BOX=almalinux9-stand-vb vagrant up --provider=virtualbox
+```
+
+или
+
+```
+VAGRANT_BOX=almalinux9-stand-vb vagrant up
+```
+
+Также иходный и модифицированный Vagrantfile рассчитаны на создание нескольких ВМ - каждую ВМ можно индивидуально описывать в массиве MACHINES.
