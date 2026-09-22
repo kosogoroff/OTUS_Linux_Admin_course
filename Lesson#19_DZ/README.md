@@ -212,13 +212,13 @@ f8929b8a6ab1   my-nginx-alpine:1.0   "nginx -g 'daemon of…"   23 hours ago   U
 
 ### 4. Результирующий кастомный образ помещённый на Dockerhub:
 
-1. Ссылка на образ:
+1) Ссылка на образ:
 
 ```
    https://hub.docker.com/r/kosogoroff/my-nginx-alpine
 ```
    
-2. Команды для запуска:
+2) Команды для запуска:
    
    ```bash
    docker pull kosogoroff/my-nginx-alpine:1.0
