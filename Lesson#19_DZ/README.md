@@ -89,6 +89,7 @@ CMD ["nginx", "-g", "daemon off;"]
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="utf-8">
     <title>Мой кастомный Nginx</title>
   </head>
   <body>
