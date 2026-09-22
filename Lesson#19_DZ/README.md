@@ -209,3 +209,17 @@ f8929b8a6ab1   my-nginx-alpine:1.0   "nginx -g 'daemon of…"   23 hours ago   U
 
 В данном случае файл кастомной страницы index.html помещён прямо в собранный образ Docker.
 
+
+### 4. Результирующий кастомный образ помещённый на Dockerhub:
+
+1. Ссылка на образ:
+
+```
+   https://hub.docker.com/r/kosogoroff/my-nginx-alpine
+```
+   
+2. Команды для запуска:
+   
+   ```bash
+   docker pull kosogoroff/my-nginx-alpine:1.0
+   docker run -d -p 8081:80 --name test-nginx kosogoroff/my-nginx-alpine:1.0
