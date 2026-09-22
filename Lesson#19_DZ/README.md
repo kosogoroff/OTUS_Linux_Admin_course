@@ -42,7 +42,46 @@ Docker Compose version 5.0.2
 [admin_insta11@mv334 ~]$
 ```
 
-Ниже приведены результаты выполнения лабораторной работы:
+
+На Dockerhub помещён для проверки результирующий кастомный образ Docker на основе alpine с установленным пакетом nginx и кастомной страницей.
+
+1) Ссылка на образ в Dockerhub:
+
+```
+   https://hub.docker.com/r/kosogoroff/my-nginx-alpine
+```
+   
+Команды для запуска:
+   
+   ```bash
+   docker pull kosogoroff/my-nginx-alpine:1.0
+   docker run -d -p 8081:80 --name test-nginx kosogoroff/my-nginx-alpine:1.0
+
+3) Ссылка на репозиторий в Git с файлами для создания кастомного образа:
+
+```
+https://github.com/kosogoroff/nginx-alpine-custom.git
+```
+
+Команды для скачивания и сборки образа:
+
+```
+git clone https://github.com/kosogoroff/nginx-alpine-custom.git
+cd nginx-alpine-custom
+docker run -d -p 8081:80 --name test-nginx my-nginx-alpine:1.0
+```
+
+Команды для проверки:
+
+```
+docker ps
+curl http://localhost:8081
+```
+
+Ожидается вывод кастомной WEB-страницы.
+
+
+Ниже приведены более подробно результаты выполнения лабораторной работы:
 
 1. Создаём рабочую директорию проекта, создаём в ней три файла :
 
@@ -207,25 +246,6 @@ f8929b8a6ab1   my-nginx-alpine:1.0   "nginx -g 'daemon of…"   23 hours ago   U
 <img width="949" height="485" alt="изображение" src="https://github.com/user-attachments/assets/c150f13a-7410-479a-81f2-a4c55edee5bf" />
 
 
-
-### 4. Результирующий кастомный образ помещённый на Dockerhub:
-
-На Dockerhub помещён результирующий кастомный образ, в котором:
-
-
-1) Ссылка на образ:
-
-```
-   https://hub.docker.com/r/kosogoroff/my-nginx-alpine
-```
-   
-2) Команды для запуска:
-   
-   ```bash
-   docker pull kosogoroff/my-nginx-alpine:1.0
-   docker run -d -p 8081:80 --name test-nginx kosogoroff/my-nginx-alpine:1.0
-
-
 На этом основное задание лабораторной работы выполнено.
 
 # КОНЕЦ
@@ -296,4 +316,203 @@ docker-alpine-mysql/
 │   └── db.php
 └── data/                  # сюда будут сохраняться данные MySQL (опционально)
 ```
+
+docker-compose.yml
+
+```
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./php:/var/www/html:ro
+    depends_on:
+      php:
+        condition: service_started
+      db:
+        condition: service_started
+    networks:
+      - app-net
+
+  php:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    container_name: php-alpine
+    volumes:
+      - ./php:/var/www/html:ro
+    environment:
+      MYSQL_HOST: db
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: secret
+      MYSQL_DB: people_db
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  db:
+    image: mariadb:10.6
+    container_name: mysql-alpine
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootsecret
+      MYSQL_DATABASE: people_db
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: secret
+    volumes:
+      - ./data:/var/lib/mysql
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "appuser", "-psecret"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+networks:
+  app-net:
+    driver: bridge
+[admin_insta11@mv334 docker-alpine-mysql]$ 
+[admin_insta11@mv334 docker-alpine-mysql]$ cat nginx/default.conf
+server {
+    listen 80;
+    server_name localhost;
+    root /var/www/html;
+    index index.php index.html;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass php:9000;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+}
+[admin_insta11@mv334 docker-alpine-mysql]$ cat php/db.php
+<?php
+$host = getenv('MYSQL_HOST') ?: 'db';
+$user = getenv('MYSQL_USER') ?: 'appuser';
+$pass = getenv('MYSQL_PASSWORD') ?: 'secret';
+$db   = getenv('MYSQL_DB') ?: 'people_db';
+
+$dsn = "mysql:host=$host;dbname=$db;charset=utf8mb4";
+$options = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+];
+
+try {
+    $pdo = new PDO($dsn, $user, $pass, $options);
+} catch (PDOException $e) {
+    die("Ошибка подключения к БД: " . $e->getMessage());
+}
+
+// Создаём таблицу, если её нет
+$sql = "CREATE TABLE IF NOT EXISTS people (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name  VARCHAR(50) NOT NULL,
+    age        INT NOT NULL
+)";
+$pdo->exec($sql);
+[admin_insta11@mv334 docker-alpine-mysql]$ 
+[admin_insta11@mv334 docker-alpine-mysql]$ cat php/index.php
+<?php
+require_once 'db.php';
+
+// Обработка действий
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['action']) && $_POST['action'] === 'add') {
+        $first = trim($_POST['first_name'] ?? '');
+        $last  = trim($_POST['last_name'] ?? '');
+        $age   = (int)($_POST['age'] ?? 0);
+        if ($first && $last && $age > 0) {
+            $stmt = $pdo->prepare("INSERT INTO people (first_name, last_name, age) VALUES (?, ?, ?)");
+            $stmt->execute([$first, $last, $age]);
+        }
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'delete' && isset($_POST['id'])) {
+        $id = (int)$_POST['id'];
+        if ($id > 0) {
+            $stmt = $pdo->prepare("DELETE FROM people WHERE id = ?");
+            $stmt->execute([$id]);
+        }
+    }
+    header('Location: /');
+    exit;
+}
+
+// Получаем список
+$people = $pdo->query("SELECT * FROM people ORDER BY id")->fetchAll();
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Люди — MySQL + PHP + Nginx</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem; }
+        form { margin-bottom: 2rem; border: 1px solid #ccc; padding: 1rem; }
+        label { display: block; margin-top: 0.5rem; }
+        input { padding: 0.4rem; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 0.4rem; text-align: left; }
+        .delete-btn { color: red; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Список людей</h1>
+
+    <form method="post">
+        <input type="hidden" name="action" value="add">
+        <label>Фамилия: <input type="text" name="last_name" required></label>
+        <label>Имя: <input type="text" name="first_name" required></label>
+        <label>Возраст: <input type="number" name="age" required></label>
+        <button type="submit">Добавить</button>
+    </form>
+
+    <?php if (count($people) > 0): ?>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Фамилия</th><th>Имя</th><th>Возраст</th><th></th></tr>
+        </thead>
+        <tbody>
+            <?php foreach ($people as $row): ?>
+            <tr>
+                <td><?= htmlspecialchars($row['id']) ?></td>
+                <td><?= htmlspecialchars($row['last_name']) ?></td>
+                <td><?= htmlspecialchars($row['first_name']) ?></td>
+                <td><?= htmlspecialchars($row['age']) ?></td>
+                <td>
+                    <form method="post" style="display:inline;">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="id" value="<?= $row['id'] ?>">
+                        <button type="submit" class="delete-btn">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php else: ?>
+    <p>Пока нет записей.</p>
+    <?php endif; ?>
+</body>
+</html>
+[admin_insta11@mv334 docker-alpine-mysql]$ 
+```
+
+Все сервисы в одной сети app-net — они видят друг друга по именам (db, php, nginx).
+
+Nginx пробрасывает запросы на PHP‑FPM через fastcgi_pass php:9000.
+
+База данных хранит данные на хосте в папке data, чтобы они не пропали при docker compose down.
 
