@@ -53,9 +53,10 @@ Docker Compose version 5.0.2
    
 Команды для запуска:
    
-   ```bash
+```
    docker pull kosogoroff/my-nginx-alpine:1.0
    docker run -d -p 8081:80 --name test-nginx kosogoroff/my-nginx-alpine:1.0
+```
 
 3) Ссылка на репозиторий в Git с файлами для создания кастомного образа:
 
@@ -80,6 +81,8 @@ curl http://localhost:8081
 
 Ожидается вывод кастомной WEB-страницы.
 
+
+## Описание
 
 Ниже приведены более подробно результаты выполнения лабораторной работы:
 
