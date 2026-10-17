@@ -208,10 +208,10 @@ Domain 'ubuntu-24.04-01' is being shutdown
 
 Его можно удалить командами:
 
-'''
+```
 VBoxManage hostonlyif remove vboxnet0
 sudo ip link delete vboxnet0
-'''
+```
 
 
 По ссылке https://github.com/kosogoroff/ansible_lab.git выложен работающий репозиторий с выполненным домашним заданием.
