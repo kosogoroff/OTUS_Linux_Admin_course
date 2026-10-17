@@ -401,3 +401,5 @@ Connection to 192.168.57.10 closed.
 [vagrant@pam ~]$ 
 ```
 
+Репозиторий проекта выложен на Github по ссылке https://github.com/kosogoroff/users_rights.git
+
