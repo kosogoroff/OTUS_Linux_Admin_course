@@ -213,7 +213,191 @@ VBoxManage hostonlyif remove vboxnet0
 sudo ip link delete vboxnet0
 ```
 
+### 2. Выполнение лабораторной работы из домашнего задания
 
-По ссылке https://github.com/kosogoroff/ansible_lab.git выложен работающий репозиторий с выполненным домашним заданием.
+Подключаемся с хоста к ВМ, создаём пользователей otus и otusadm и группу admin, добавляем пользователя otus в группу admin.
+Проверяем, что созданные пользователи нормально входят в ВМ по SSH со своими логинами и паролями:
 
-Полный состав лабораторного проекта:
+```
+[admin_insta11@mv334 users_rights]$ vagrant ssh
+[vagrant@pam ~]$ 
+[vagrant@pam ~]$ sudo -i
+[root@pam ~]# 
+[root@pam ~]# sudo useradd otusadm && sudo useradd otus
+[root@pam ~]# 
+[root@pam ~]# echo "Otus2022!" | sudo passwd --stdin otusadm && echo "Otus2022!" | sudo passwd --stdin otus
+Changing password for user otusadm.
+passwd: all authentication tokens updated successfully.
+Changing password for user otus.
+passwd: all authentication tokens updated successfully.
+[root@pam ~]# 
+[root@pam ~]# sudo groupadd -f admin
+[root@pam ~]# 
+[root@pam ~]# usermod otusadm -a -G admin && usermod root -a -G admin && usermod vagrant -a -G admin
+[root@pam ~]#
+[root@pam ~]# cat /etc/group | grep admin
+printadmin:x:996:
+admin:x:1003:otusadm,root,vagrant
+[root@pam ~]# 
+[root@pam ~]# exit
+logout
+[vagrant@pam ~]$
+[vagrant@pam ~]$ ssh otus@192.168.57.10
+The authenticity of host '192.168.57.10 (192.168.57.10)' can't be established.
+ED25519 key fingerprint is SHA256:Wx7staT8yLtR6i/r9EFiYM2Q3StJWcoEuFeGQK0ZBz4.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '192.168.57.10' (ED25519) to the list of known hosts.
+otus@192.168.57.10's password: 
+[otus@pam ~]$ 
+[otus@pam ~]$ whoami
+otus
+[otus@pam ~]$ exit
+logout
+Connection to 192.168.57.10 closed.
+[vagrant@pam ~]$ 
+[vagrant@pam ~]$ ssh otusadm@192.168.57.10
+otusadm@192.168.57.10's password: 
+[otusadm@pam ~]$ whoami
+otusadm
+[otusadm@pam ~]$ exit
+logout
+Connection to 192.168.57.10 closed.
+[vagrant@pam ~]$ exit
+logout
+```
+
+Далее необходимо ограничить доступ к системе для всех пользователей, кроме группы администраторов, в выходные дни (суббота и воскресенье). Для этого конфигурируем PAM, создаём скрипт для модeля PAM pam_exec скрипт контроля аутентификации пользователей. 
+
+В скрипте подписаны все условия. Скрипт работает по принципу: 
+
+1. Если сегодня суббота или воскресенье, то нужно проверить, входит ли пользователь в группу admin, если не входит — то подключение запрещено.
+
+2. При любых других вариантах подключение разрешено. 
+
+Созданный скрипт делаем исполняемым, и прописываем его в файл правил PAM для соединений SSH:
+
+```
+[admin_insta11@mv334 users_rights]$ vagrant ssh
+Last login: Sat Oct 17 15:03:00 2026 from 192.168.121.1
+[vagrant@pam ~]$ 
+[vagrant@pam ~]$ sudo -i
+[root@pam ~]# 
+[root@pam ~]# vi /usr/local/bin/login.sh
+[root@pam ~]# 
+[root@pam ~]# cat /usr/local/bin/login.sh
+#!/bin/bash
+#Первое условие: если день недели суббота или воскресенье
+if [ $(date +%a) = "Sat" ] || [ $(date +%a) = "Sun" ]; then
+ #Второе условие: входит ли пользователь в группу admin
+ if getent group admin | grep -qw "$PAM_USER"; then
+        #Если пользователь входит в группу admin, то он может подключиться
+        exit 0
+      else
+        #Иначе ошибка (не сможет подключиться)
+        exit 1
+    fi
+  #Если день не выходной, то подключиться может любой пользователь
+  else
+    exit 0
+fi
+
+[root@pam ~]# 
+[root@pam ~]# chmod +x /usr/local/bin/login.sh
+[root@pam ~]# 
+[root@pam ~]# 
+[root@pam ~]# cat /etc/pam.d/sshd
+#%PAM-1.0
+auth       substack     password-auth
+auth       include      postlogin
+account    required     pam_sepermit.so
+account    required     pam_nologin.so
+account    include      password-auth
+password   include      password-auth
+# pam_selinux.so close should be the first session rule
+session    required     pam_selinux.so close
+session    required     pam_loginuid.so
+# pam_selinux.so open should only be followed by sessions to be executed in the user context
+session    required     pam_selinux.so open env_params
+session    required     pam_namespace.so
+session    optional     pam_keyinit.so force revoke
+session    optional     pam_motd.so
+session    include      password-auth
+session    include      postlogin
+[root@pam ~]# 
+[root@pam ~]# vi /etc/pam.d/sshd
+[root@pam ~]# 
+[root@pam ~]# cat /etc/pam.d/sshd
+#%PAM-1.0
+auth       substack     password-auth
+auth       include      postlogin
+auth       required     pam_exec.so debug /usr/local/bin/login.sh
+
+account    required     pam_sepermit.so
+account    required     pam_nologin.so
+account    include      password-auth
+password   include      password-auth
+# pam_selinux.so close should be the first session rule
+session    required     pam_selinux.so close
+session    required     pam_loginuid.so
+# pam_selinux.so open should only be followed by sessions to be executed in the user context
+session    required     pam_selinux.so open env_params
+session    required     pam_namespace.so
+session    optional     pam_keyinit.so force revoke
+session    optional     pam_motd.so
+session    include      password-auth
+session    include      postlogin
+[root@pam ~]#
+```
+
+Далее проверяем возможность входа созданных пользователей по SSH в зависимости от дня недели.
+Сначала устанавливаем в ВМ дату 16 октября 2026 (пятница). С этой датой в ВМ по SSH могут войти оба созданных пользователя - и otus , и otusadm:
+
+```
+[vagrant@pam ~]$ sudo date -s "2026-10-16"
+Fri Oct 16 12:00:00 AM UTC 2026
+[vagrant@pam ~]$ 
+[vagrant@pam ~]$ 
+[vagrant@pam ~]$ ssh otus@192.168.57.10
+otus@192.168.57.10's password: 
+Last failed login: Sat Oct 17 15:18:50 UTC 2026 from 192.168.57.10 on ssh:notty
+There was 1 failed login attempt since the last successful login.
+Last login: Sat Oct 17 15:06:29 2026 from 192.168.57.10
+[otus@pam ~]$ whoami
+otus
+[otus@pam ~]$ exit
+logout
+Connection to 192.168.57.10 closed.
+[vagrant@pam ~]$ 
+[vagrant@pam ~]$ ssh otusadm@192.168.57.10
+otusadm@192.168.57.10's password: 
+Last login: Sat Oct 17 15:19:06 2026 from 192.168.57.10
+[otusadm@pam ~]$ exit
+logout
+Connection to 192.168.57.10 closed.
+[vagrant@pam ~]$
+```
+
+Затем устанавливаем в ВМ дату 17 октября 2026 (суббота). С этой датой в ВМ по SSH может войти только пользователь otusadm,
+входящий в группу admin. Пользователь otus по SSH войти не может:
+
+```
+[vagrant@pam ~]$ sudo date -s "2026-10-17"
+Sat Oct 17 12:00:00 AM UTC 2026
+[vagrant@pam ~]$ 
+[vagrant@pam ~]$ ssh otus@192.168.57.10
+otus@192.168.57.10's password: 
+Permission denied, please try again.
+otus@192.168.57.10's password: 
+
+[vagrant@pam ~]$ 
+[vagrant@pam ~]$ ssh otusadm@192.168.57.10
+otusadm@192.168.57.10's password: 
+Last login: Fri Oct 16 00:01:09 2026 from 192.168.57.10
+[otusadm@pam ~]$ 
+[otusadm@pam ~]$ exit
+logout
+Connection to 192.168.57.10 closed.
+[vagrant@pam ~]$ 
+```
+
