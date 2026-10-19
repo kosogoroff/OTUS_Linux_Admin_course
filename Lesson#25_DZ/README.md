@@ -31,7 +31,7 @@
 
 На центральном сервере конфигурируем вариант с использованием rsyslog.
 
-### 1. Создание конфигурирование ВМ, первоначальное конфигурирование доступа средствами vagrant
+### 0. Создание конфигурирование ВМ, первоначальное конфигурирование доступа средствами vagrant
 
 ### Описание 
 
@@ -177,7 +177,7 @@ VBoxManage hostonlyif remove vboxnet0
 sudo ip link delete vboxnet0
 ```
 
-Создаём две ВМ с использованием Vagrantfile :
+### 1. Создаём две ВМ с использованием Vagrantfile :
 
 ```
 [admin_insta11@mv334 ~]$ mkdir logs_lab
@@ -482,6 +482,8 @@ root@web:~#
 
 ### 3. Настраиваем rsyslog на ВМ log
 
+На ВМ log также проверяем синхронизацию и правильность времени.
+
 Настраиваем на ВМ log rsyslog сервер (открываем порты TCP 514 и UDP 514) и правила для приёма сообщений с удалённых хостов, а также для сохранения логов в файлы.
 
 Данные параметры будут отправлять в папку /var/log/rsyslog логи, которые будут приходить от других серверов. Например, Access-логи nginx от сервера web, будут идти в файл /var/log/rsyslog/web/nginx_access.log
@@ -489,10 +491,35 @@ root@web:~#
 Перегружаем rsyslog, убеждаемся, что сервер rsyslog начал слушать порты TCP 514 и UDP 514:
 
 ```
+vagrant@log:~$ sudo -i
+root@log:~# 
+root@log:~# timedatectl timesync-status
+       Server: n/a (ntp.ubuntu.com)
+Poll interval: 0 (min: 32s; max 34min 8s)
+ Packet count: 0
+root@log:~# 
+root@log:~# timedatectl timesync-status
+       Server: 91.189.91.157 (ntp.ubuntu.com)
+Poll interval: 32s (min: 32s; max 34min 8s)
+         Leap: normal
+      Version: 4
+      Stratum: 2
+    Reference: 84A36001
+    Precision: 1us (-24)
+Root distance: 22.826ms (max: 5s)
+       Offset: -10.709247s
+        Delay: 171.799ms
+       Jitter: 0
+ Packet count: 1
+    Frequency: +0.000ppm
+root@log:~# 
 root@log:~# apt list rsyslog
 Listing... Done
 rsyslog/jammy-updates,jammy-security,now 8.2112.0-2ubuntu2.2 amd64 [installed,automatic]
-root@log:~# 
+root@log:~#
+root@log:~#
+root@log:~# vi /etc/rsyslog.conf
+root@log:~#
 root@log:~# cat /etc/rsyslog.conf 
 # /etc/rsyslog.conf configuration file for rsyslog
 #
