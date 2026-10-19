@@ -794,3 +794,97 @@ type=CWD msg=audit(10/18/2026 15:54:09.545:141) : cwd=/root
 type=SYSCALL msg=audit(10/18/2026 15:54:09.545:141) : arch=x86_64 syscall=unlinkat success=yes exit=0 a0=AT_FDCWD a1=0x55d4b142e4d0 a2=0x0 a3=0x100 items=2 ppid=1692 pid=4161 auid=vagrant uid=root gid=root euid=root suid=root fsuid=root egid=root sgid=root fsgid=root tty=pts1 ses=4 comm=rm exe=/usr/bin/rm subj=unconfined key=nginx_config 
 root@web:~# 
 ```
+
+### 4.2 Настройка мониторинга лога аудита rsyslog сервером на ВМ web
+
+Для мониторинга лога аудита сервером rsyslog на ВМ web используется модуль imfile, создаём файл с правилами для мониторинга файла /var/log/audit/audit.log и для отправки сообщений, содержащих 
+сведения об изменении файлов в директории /etc/nginx/ на удалённый rsyslog сервер в ВМ log , для применения перегружаем rsyslog на ВМ web: 
+
+
+```
+root@web:~# vi /etc/rsyslog.d/20-audit-file.conf
+root@web:~#
+root@web:~# cat /etc/rsyslog.d/20-audit-file.conf
+# Включаем чтение файла audit.log
+module(load="imfile")
+
+input(type="imfile"
+      File="/var/log/audit/audit.log"
+      Tag="auditd-file"
+      Severity="info"
+      Facility="local6")
+
+# Если в строке есть key=nginx_config — отправляем на центральный сервер
+if $msg contains '/etc/nginx/' then @192.168.56.15:514
+& stop
+
+root@web:~# 
+root@web:~# systemctl restart rsyslog
+root@web:~# 
+
+```
+
+
+### 4.3 Настройка получения и сохранения лога аудита rsyslog сервером на ВМ log
+
+Для сбора сообщений аудита сервером rsyslog на ВМ log и их направления в отдельный файл audit.log создаём файл конфигурации с правилом, для применения перегружаем rsyslog на ВМ log: 
+
+```
+root@log:~# vi /etc/rsyslog.d/30-audit-nginx-receiver.conf
+root@log:~# 
+root@log:~# cat /etc/rsyslog.d/30-audit-nginx-receiver.conf
+# Создаём отдельный файл для nginx_config событий
+if $msg contains 'key="nginx_config"' then /var/log/rsyslog/%HOSTNAME%/audit.log
+& stop
+root@log:~# 
+root@log:~# systemctl restart rsyslog
+root@log:~# 
+```
+
+### 4.4 Проверка получения и сохранения лога аудита rsyslog сервером на ВМ log
+
+Для проверки полученных конфигураций повторно создаём на ВМ web в директории /etc/nginx файл, а затем удаляем его:
+
+```
+root@web:~# 
+root@web:~# cat > /etc/nginx/tempfile
+234234
+root@web:~# rm /etc/nginx/tempfile
+root@web:~#
+```
+
+При этом на ВМ log создаётся файл auditd-file.log с сообщениями аудита о создании и удалении файла:
+
+```
+root@log:~# ll /var/log/rsyslog/web/
+total 20
+drwxr-xr-x 2 syslog syslog 4096 Oct 18 16:46 ./
+drwxr-xr-x 5 syslog syslog 4096 Oct 18 16:41 ../
+-rw-r----- 1 syslog adm    1034 Oct 18 16:46 auditd-file.log
+-rw-r----- 1 syslog adm    1360 Oct 18 16:24 nginx_access.log
+-rw-r----- 1 syslog adm     207 Oct 18 15:16 nginx_error.log
+root@log:~# 
+root@log:~# cat /var/log/rsyslog/web/auditd-file.log 
+Oct 18 16:46:23 web auditd-file type=PATH msg=audit(1792341983.227:201): item=0 name="/etc/nginx/" inode=394282 dev=fd:00 mode=040755 ouid=0 ogid=0 rdev=00:00 nametype=PARENT cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0#035OUID="root" OGID="root"
+Oct 18 16:46:23 web auditd-file type=PATH msg=audit(1792341983.227:201): item=1 name="/etc/nginx/tempfile" inode=394493 dev=fd:00 mode=0100644 ouid=0 ogid=0 rdev=00:00 nametype=CREATE cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0#035OUID="root" OGID="root"
+Oct 18 16:46:33 web auditd-file type=PATH msg=audit(1792341993.789:202): item=0 name="/etc/nginx/" inode=394282 dev=fd:00 mode=040755 ouid=0 ogid=0 rdev=00:00 nametype=PARENT cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0#035OUID="root" OGID="root"
+Oct 18 16:46:33 web auditd-file type=PATH msg=audit(1792341993.789:202): item=1 name="/etc/nginx/tempfile" inode=394493 dev=fd:00 mode=0100644 ouid=0 ogid=0 rdev=00:00 nametype=DELETE cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0#035OUID="root" OGID="root"
+root@log:~# 
+```
+
+Эти же сообщения видны и в общем логе rsyslog на ВМ log:
+
+```
+root@log:~# 
+root@log:~# tail -f /var/log/syslog | grep -i nginx
+Oct 18 16:24:54 web nginx_access: 192.168.56.1 - - [18/Oct/2026:16:24:54 +0000] "GET / HTTP/1.1" 200 396 "-" "Mozilla/5.0 (X11; Linux x86_64; Chromium GOST) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+Oct 18 16:46:23 web auditd-file type=PATH msg=audit(1792341983.227:201): item=0 name="/etc/nginx/" inode=394282 dev=fd:00 mode=040755 ouid=0 ogid=0 rdev=00:00 nametype=PARENT cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0#035OUID="root" OGID="root"
+Oct 18 16:46:23 web auditd-file type=PATH msg=audit(1792341983.227:201): item=1 name="/etc/nginx/tempfile" inode=394493 dev=fd:00 mode=0100644 ouid=0 ogid=0 rdev=00:00 nametype=CREATE cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0#035OUID="root" OGID="root"
+Oct 18 16:46:33 web auditd-file type=PATH msg=audit(1792341993.789:202): item=0 name="/etc/nginx/" inode=394282 dev=fd:00 mode=040755 ouid=0 ogid=0 rdev=00:00 nametype=PARENT cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0#035OUID="root" OGID="root"
+Oct 18 16:46:33 web auditd-file type=PATH msg=audit(1792341993.789:202): item=1 name="/etc/nginx/tempfile" inode=394493 dev=fd:00 mode=0100644 ouid=0 ogid=0 rdev=00:00 nametype=DELETE cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0#035OUID="root" OGID="root"
+
+^C
+root@log:~#
+```
+
+**Вывод:** настроен мониторинг сообщений лога аудита об изменениях конфигурации nginx в директории /etc/nginx/ с помощью auditd, а также мониторинг в логе аудита сообщений об изменениях rsyslog сервером на ВМ web и их передача на центральный rsyslog server на ВМ log и их вывод в отдельный файл лога.
