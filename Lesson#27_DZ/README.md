@@ -607,9 +607,33 @@ backup                     : ok=5    changed=0    unreachable=0    failed=0    s
 
 #### 2.1 Создаём пользователя borg на сервере backup, настраиваем аутентификацию по ключам и вводим ограничение для данного ключа на сервере только на работу с логами borg
 
-На сервере backup создаём пользователя borg, файл для публичных ключей для него с нужными правами:
+На сервере backup устанавливаем borgbackup, создаём пользователя borg, файл для публичных ключей для него с нужными правами:
 
 ```
+vagrant@backup:~$ sudo -i
+root@backup:~# apt install borgbackup
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libfuse2 python3-async-generator python3-llfuse python3-msgpack python3-outcome python3-pyfuse3 python3-sniffio python3-sortedcontainers python3-trio
+Suggested packages:
+  borgbackup-doc python-llfuse-doc python-sortedcontainers-doc
+The following NEW packages will be installed:
+  borgbackup libfuse2 python3-async-generator python3-llfuse python3-msgpack python3-outcome python3-pyfuse3 python3-sniffio python3-sortedcontainers python3-trio
+0 upgraded, 10 newly installed, 0 to remove and 2 not upgraded.
+Need to get 1,712 kB of archives.
+After this operation, 7,070 kB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+Get:1 http://us.archive.ubuntu.com/ubuntu jammy/main amd64 python3-msgpack amd64 1.0.3-1build1 [67.8 kB]
+Get:2 http://us.archive.ubuntu.com/ubuntu jammy-updates/universe amd64 borgbackup amd64 1.2.0-1ubuntu1.22.04.1 [792 kB]
+Get:3 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 libfuse2 amd64 2.9.9-5ubuntu3 [90.3 kB]
+Get:4 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 python3-async-generator all 1.10-3 [17.5 kB]
+Get:5 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 python3-llfuse amd64 1.3.8+dfsg-2build1 [291 kB]
+Get:6 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 python3-outcome all 1.1.0-1 [5,820 B]
+Get:7 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 python3-sniffio all 1.2.0-1 [6,438 B]
+<...>
+root@backup:~# 
 root@backup:~# adduser borg
 Adding user `borg' ...
 Adding new group `borg' (1001) ...
@@ -630,9 +654,32 @@ borg@backup:~$ chmod 700 .ssh
 borg@backup:~$ chmod 600 .ssh/authorized_keys
 ```
 
-На ВМ client генерируем ключи и конфигурируем аутентификацию по ключам из пользователя root на клиенте к пользователю borg на сервере backup:
+На ВМ client устанавливаем borgbackup, генерируем ключи и конфигурируем аутентификацию по ключам из пользователя root на клиенте к пользователю borg на сервере backup:
 
 ```
+root@client:~# apt install borgbackup
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libfuse2 python3-async-generator python3-llfuse python3-msgpack python3-outcome python3-pyfuse3 python3-sniffio python3-sortedcontainers python3-trio
+Suggested packages:
+  borgbackup-doc python-llfuse-doc python-sortedcontainers-doc
+The following NEW packages will be installed:
+  borgbackup libfuse2 python3-async-generator python3-llfuse python3-msgpack python3-outcome python3-pyfuse3 python3-sniffio python3-sortedcontainers python3-trio
+0 upgraded, 10 newly installed, 0 to remove and 2 not upgraded.
+Need to get 1,712 kB of archives.
+After this operation, 7,070 kB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+Get:1 http://us.archive.ubuntu.com/ubuntu jammy/main amd64 python3-msgpack amd64 1.0.3-1build1 [67.8 kB]
+Get:2 http://us.archive.ubuntu.com/ubuntu jammy-updates/universe amd64 borgbackup amd64 1.2.0-1ubuntu1.22.04.1 [792 kB]
+Get:3 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 libfuse2 amd64 2.9.9-5ubuntu3 [90.3 kB]
+Get:4 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 python3-async-generator all 1.10-3 [17.5 kB]
+Get:5 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 python3-llfuse amd64 1.3.8+dfsg-2build1 [291 kB]
+Get:6 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 python3-outcome all 1.1.0-1 [5,820 B]
+Get:7 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 python3-sniffio all 1.2.0-1 [6,438 B]
+<...>
+root@client:~# 
 root@client:~# ssh-keygen -t ed25519
 Generating public/private ed25519 key pair.
 Enter file in which to save the key (/root/.ssh/id_ed25519): 
