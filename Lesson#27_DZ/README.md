@@ -20,7 +20,7 @@
 
 - директория для резервных копий /var/backup. Это должна быть отдельная точка монтирования. В данном случае для демонстрации размер не принципиален, достаточно будет и 2GB;
 
-- репозиторий дле резервных копий должен быть зашифрован ключом или паролем - на ваше усмотрение;
+- репозиторий для резервных копий должен быть зашифрован ключом или паролем - на ваше усмотрение;
   
 - имя бекапа должно содержать информацию о времени снятия бекапа;
 
@@ -599,3 +599,803 @@ backup                     : ok=5    changed=0    unreachable=0    failed=0    s
 [admin_insta11@mv334 backups_lab]$ 
 ```
 
+### 2. Конфигурирование резервирования на ВМ 
+
+#### 2.1 Создаём пользователя borg на сервере backup, настраиваем аутентификацию по ключам и вводим ограничение для данного ключа на сервере только на работу с логами borg
+
+На сервере backup создаём пользователя borg, файл для публичных ключей для него с нужными правами:
+
+```
+root@backup:~# adduser borg
+Adding user `borg' ...
+Adding new group `borg' (1001) ...
+Adding new user `borg' (1001) with group `borg' ...
+Creating home directory `/home/borg' ...
+Copying files from `/etc/skel' ...
+New password: 
+Retype new password: 
+passwd: password updated successfully
+root@backup:~# 
+root@backup:~# mkdir /var/backup/
+root@backup:~# chown borg:borg /var/backup/
+root@backup:~# 
+root@backup:~# su - borg
+borg@backup:~$ mkdir .ssh
+borg@backup:~$ touch .ssh/authorized_keys
+borg@backup:~$ chmod 700 .ssh
+borg@backup:~$ chmod 600 .ssh/authorized_keys
+```
+
+На ВМ client генерируем клучи и конфигурируем аутентификацию по ключам из пользователя root на клиенте к пользователю borg на сервере backup:
+
+```
+root@client:~# ssh-keygen -t ed25519
+Generating public/private ed25519 key pair.
+Enter file in which to save the key (/root/.ssh/id_ed25519): 
+Enter passphrase (empty for no passphrase): 
+Enter same passphrase again: 
+Your identification has been saved in /root/.ssh/id_ed25519
+Your public key has been saved in /root/.ssh/id_ed25519.pub
+The key fingerprint is:
+SHA256:owr98iikEI10Mrnpe+JMNJR8fJhhFohu9SuUsV4VUfo root@client
+The key's randomart image is:
++--[ED25519 256]--+
+|. o=.  o+.       |
+|o*=++  ..        |
+|o*B==...         |
+|+=o+.o  .        |
+|o+o . . SE       |
+|o.o+ . . .       |
+|.+o o .          |
+|+o.o.+           |
+|.oo.ooo          |
++----[SHA256]-----+
+root@client:~# 
+root@client:~# ssh-copy-id -i /root/.ssh/id_ed25519.pub borg@192.168.56.160
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: "/root/.ssh/id_ed25519.pub"
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+borg@192.168.56.160's password: 
+
+Number of key(s) added: 1
+
+Now try logging into the machine, with:   "ssh 'borg@192.168.56.160'"
+and check to make sure that only the key(s) you wanted were added.
+
+root@client:~# 
+root@client:~# ssh borg@192.168.56.160
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+borg@backup:~$ exit
+logout
+Connection to 192.168.56.160 closed.
+root@client:~# 
+root@client:~# 
+root@client:~# 
+root@client:~# ssh -i /root/.ssh/id_ed25519 borg@192.168.56.160 whoami
+borg
+root@client:~# 
+```
+
+После этого файл authorized_keys на сервере выглядит следующим образом стандртно:
+
+```
+borg@backup:~$ cat .ssh/authorized_keys
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFL92VLvEp43DQ4ZvnCPq6puYXEDjfEOtbX0ChiOnho1 root@client
+borg@backup:~$ 
+```
+
+Далее на сервере ограничиваем права данного публичного ключа выполнением только резервирования borg - после этого при 
+заходе с client на backup с данным публичным ключом авторизации вместо интерактивной консоли будет выполняться команда borg:
+
+```
+borg@backup:~$ cat .ssh/authorized_keys
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFL92VLvEp43DQ4ZvnCPq6puYXEDjfEOtbX0ChiOnho1 root@client
+borg@backup:~$ 
+borg@backup:~$ vi .ssh/authorized_keys
+borg@backup:~$ 
+borg@backup:~$ cat .ssh/authorized_keys
+#ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFL92VLvEp43DQ4ZvnCPq6puYXEDjfEOtbX0ChiOnho1 root@client
+command="borg serve --restrict-to-repo /var/backup",restrict ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFL92VLvEp43DQ4ZvnCPq6puYXEDjfEOtbX0ChiOnho1 root@client
+borg@backup:~$
+
+root@client:~# ssh -i /root/.ssh/id_ed25519 borg@192.168.56.160 whoami
+usage: borg [-V] [-h] [--critical] [--error] [--warning] [--info] [--debug]
+            [--debug-topic TOPIC] [-p] [--iec] [--log-json]
+            [--lock-wait SECONDS] [--bypass-lock] [--show-version] [--show-rc]
+            [--umask M] [--remote-path PATH] [--remote-ratelimit RATE]
+            [--upload-ratelimit RATE] [--remote-buffer UPLOAD_BUFFER]
+            [--upload-buffer UPLOAD_BUFFER] [--consider-part-files]
+            [--debug-profile FILE] [--rsh RSH]
+            <command> ...
+
+Borg - Deduplicated Backups
+
+options:
+<...>
+```
+
+
+
+```
+ 
+root@client:~# ssh borg@192.168.56.160 whoami
+usage: borg [-V] [-h] [--critical] [--error] [--warning] [--info] [--debug]
+            [--debug-topic TOPIC] [-p] [--iec] [--log-json]
+            [--lock-wait SECONDS] [--bypass-lock] [--show-version] [--show-rc]
+            [--umask M] [--remote-path PATH] [--remote-ratelimit RATE]
+            [--upload-ratelimit RATE] [--remote-buffer UPLOAD_BUFFER]
+            [--upload-buffer UPLOAD_BUFFER] [--consider-part-files]
+            [--debug-profile FILE] [--rsh RSH]
+            <command> ...
+
+Borg - Deduplicated Backups
+
+options:
+<...>
+
+```
+
+
+#### 2.2 Настраиваем резервирование
+
+На клиенте 
+
+```
+root@client:~# borg init --encryption=repokey borg@192.168.56.160:/var/backup/
+Enter new passphrase: 
+Enter same passphrase again: 
+Do you want your passphrase to be displayed for verification? [yN]: 
+
+By default repositories initialized with this version will produce security
+errors if written to with an older version (up to and including Borg 1.0.8).
+
+If you want to use these older versions, you can disable the check by running:
+borg upgrade --disable-tam ssh://borg@192.168.56.160/var/backup
+
+See https://borgbackup.readthedocs.io/en/stable/changes.html#pre-1-0-9-manifest-spoofing-vulnerability for details about the security implications.
+
+IMPORTANT: you will need both KEY AND PASSPHRASE to access this repo!
+If you used a repokey mode, the key is stored in the repo, but you should back it up separately.
+Use "borg key export" to export the key, optionally in printable format.
+Write down the passphrase. Store both at safe place(s).
+
+root@client:~#
+root@client:~# borg create --stats --list borg@192.168.56.160:/var/backup/::"etc-{now:%Y-%m-%d_%H:%M:%S}" /etc
+s /etc/mtab
+s /etc/os-release
+s /etc/resolv.conf
+s /etc/rmt
+s /etc/vtrgb
+d /etc/ModemManager/connection.d
+
+<...>
+
+A /etc/fonts/conf.avail/70-force-bitmaps.conf
+A /etc/fonts/conf.avail/70-no-bitmaps.conf
+A /etc/fonts/conf.avail/70-yes-bitmaps.conf
+A /etc/fonts/conf.avail/80-delicious.conf
+A /etc/fonts/conf.avail/90-synthetic.conf
+d /etc/fonts/conf.avail
+A /etc/fonts/conf.d/README
+d /etc/fonts/conf.d
+A /etc/fonts/fonts.conf
+d /etc/fonts
+d /etc
+------------------------------------------------------------------------------
+Repository: ssh://borg@192.168.56.160/var/backup
+Archive name: etc-2026-10-24_09:48:12
+Archive fingerprint: 081edf9d80a6466ba41a666895c6f97236922e8a5d709e38c5f633c13ca6e383
+Time (start): Sat, 2026-10-24 09:48:13
+Time (end):   Sat, 2026-10-24 09:48:16
+Duration: 2.75 seconds
+Number of files: 804
+Utilization of max. archive size: 0%
+------------------------------------------------------------------------------
+                       Original size      Compressed size    Deduplicated size
+This archive:                2.29 MB              1.03 MB            995.72 kB
+All archives:                2.28 MB              1.03 MB              1.07 MB
+
+                       Unique chunks         Total chunks
+Chunk index:                     757                  795
+------------------------------------------------------------------------------
+root@client:~#
+root@client:~# borg list borg@192.168.56.160:/var/backup/
+etc-2026-10-24_09:48:12              Sat, 2026-10-24 09:48:13 [081edf9d80a6466ba41a666895c6f97236922e8a5d709e38c5f633c13ca6e383]
+root@client:~# 
+root@client:~# borg list borg@192.168.56.160:/var/backup/::etc-2026-10-24_09:48:12
+drwxr-xr-x root   root          0 Sat, 2026-10-24 07:53:38 etc
+lrwxrwxrwx root   root         19 Wed, 2024-09-11 14:22:06 etc/mtab -> ../proc/self/mounts
+lrwxrwxrwx root   root         21 Tue, 2024-09-10 11:18:05 etc/os-release -> ../usr/lib/os-release
+lrwxrwxrwx root   root         39 Wed, 2024-09-11 14:22:05 etc/resolv.conf -> ../run/systemd/resolve/stub-resolv.conf
+lrwxrwxrwx root   root         13 Tue, 2023-12-05 05:15:51 etc/rmt -> /usr/sbin/rmt
+lrwxrwxrwx root   root         23 Wed, 2024-09-11 14:22:40 etc/vtrgb -> /etc/alternatives/vtrgb
+drwxr-xr-x root   root          0 Wed, 2024-09-11 14:24:23 etc/ModemManager
+<...>
+-rw-r--r-- root   root        597 Wed, 2022-03-23 13:52:38 etc/fonts/conf.avail/80-delicious.conf
+-rw-r--r-- root   root       1917 Wed, 2022-03-23 13:52:38 etc/fonts/conf.avail/90-synthetic.conf
+drwxr-xr-x root   root          0 Thu, 2025-10-23 22:32:53 etc/fonts/conf.d
+-rw-r--r-- root   root        978 Wed, 2022-03-23 13:52:38 etc/fonts/conf.d/README
+-rw-r--r-- root   root       2808 Wed, 2022-03-23 13:52:38 etc/fonts/fonts.conf
+root@client:~# 
+root@client:~# borg extract borg@192.168.56.160:/var/backup/::etc-2026-10-24_09:48:12 etc/hostname
+root@client:~# ll
+total 40
+drwx------  7 root root 4096 Oct 24 09:54 ./
+drwxr-xr-x 21 root root 4096 Oct 24 05:55 ../
+-rw-------  1 root root    5 Oct 24 06:23 .bash_history
+-rw-r--r--  1 root root 3106 Oct 15  2021 .bashrc
+drwx------  3 root root 4096 Oct 24 07:54 .cache/
+drwx------  3 root root 4096 Oct 24 07:54 .config/
+drwx------  2 root root 4096 Oct 24 09:54 etc/
+-rw-r--r--  1 root root  161 Jul  9  2019 .profile
+drwx------  3 root root 4096 Oct 23  2025 snap/
+drwx------  2 root root 4096 Oct 24 09:04 .ssh/
+root@client:~# 
+root@client:~# 
+root@client:~# ll etc/hostname
+-rw-r--r-- 1 root root 7 Oct 24 05:55 etc/hostname
+root@client:~# 
+root@client:~# cat etc/hostname
+client
+root@client:~#
+root@client:~# borg info borg@192.168.56.160:/var/backup
+Repository ID: 990cdd7b37de49a52e2461b853cd488754877aa6f59919a645d94e2cac479bd8
+Location: ssh://borg@192.168.56.160/var/backup
+Encrypted: Yes (repokey)
+Cache: /root/.cache/borg/990cdd7b37de49a52e2461b853cd488754877aa6f59919a645d94e2cac479bd8
+Security dir: /root/.config/borg/security/990cdd7b37de49a52e2461b853cd488754877aa6f59919a645d94e2cac479bd8
+------------------------------------------------------------------------------
+                       Original size      Compressed size    Deduplicated size
+All archives:                2.28 MB              1.03 MB              1.07 MB
+
+                       Unique chunks         Total chunks
+Chunk index:                     757                  795
+root@client:~# 
+root@client:~# 
+root@client:~# echo $BORG_PASSPHRASE
+
+root@client:~# 
+```
+
+#### 2.3 Настраиваем сервис и таймер systemctl
+
+На клиенте делаем скрипт /usr/local/bin/borg-backup-run.sh , который будет запускаться сервисом systemctl, следующего содержания. Также создаём файл с хранящимся в нём passphrase и правами 600
+для исключения утечки пароля на бэкап
+
+Скрипт /usr/local/bin/borg-backup-run.sh читает passphrase из файла /etc/borg/passphrase , создаёт очередной бэкап, а также записывает логи в локальный файл лога, а также в syslog :
+
+```
+root@client:~# cat /usr/local/bin/borg-backup-run.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="${REPO:-"borg@192.168.11.160:/var/backup"}"
+BACKUP_TARGET="${BACKUP_TARGET:-"/etc"}"
+LOG_FILE="/var/log/borg/borg-backup.log"
+PASSFILE="/etc/borg/passphrase"
+
+# Создаём директорию и файл лога, если нет
+mkdir -p "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+
+# Функция логирования: в файл и в syslog
+log_line() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE" | logger -t borg-backup
+}
+
+# Читаем пароль из файла
+if [[ ! -f "$PASSFILE" ]]; then
+    log_line "ERROR: Passphrase file not found: $PASSFILE"
+    exit 1
+fi
+
+# Экспортируем BORG_PASSPHRASE, чтобы Borg его увидел
+export BORG_PASSPHRASE
+BORG_PASSPHRASE="$(cat "$PASSFILE")"
+
+ARCHIVE_NAME="etc-$(date +%F_%H-%M-%S)"
+
+log_line "=== START Borg backup ==="
+log_line "REPO=$REPO TARGET=$BACKUP_TARGET ARCHIVE=$ARCHIVE_NAME"
+
+# 1. Создание бэкапа
+if ! borg create --stats "$REPO::$ARCHIVE_NAME" "$BACKUP_TARGET" 2>&1 | tee -a "$LOG_FILE"; then
+    log_line "ERROR: borg create failed"
+    exit 1
+fi
+
+# 2. Проверка репозитория
+if ! borg check "$REPO" 2>&1 | tee -a "$LOG_FILE"; then
+    log_line "WARNING: borg check reported issues"
+    # Не прерываем, но фиксируем
+fi
+
+# 3. Очистка старых бэкапов
+if ! borg prune \
+    --keep-daily 90 \
+    --keep-monthly 12 \
+    --keep-yearly 1 \
+    "$REPO" 2>&1 | tee -a "$LOG_FILE"; then
+    log_line "WARNING: borg prune reported issues"
+fi
+
+log_line "=== END Borg backup ==="
+root@client:~#
+root@client:~# 
+root@client:~# chmod 755 /usr/local/bin/borg-backup-run.sh
+root@client:~# chown root:root /usr/local/bin/borg-backup-run.sh
+
+root@client:~# cat /etc/borg/passphrase
+Otus1234
+root@client:~# ll /etc/borg/passphrase
+-rw------- 1 root root 9 Oct 24 16:24 /etc/borg/passphrase
+root@client:~# 
+```
+
+Создаём service и timer в systemctl :
+
+```
+root@client:~# cat /etc/systemd/system/borg-backup.service
+[Unit]
+Description=Borg Backup
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+# Никакого BORG_PASSPHRASE здесь — он берётся из файла внутри скрипта
+Environment=REPO="borg@192.168.56.160:/var/backup"
+Environment=BACKUP_TARGET="/etc"
+ExecStart=/usr/local/bin/borg-backup-run.sh
+RemainAfterExit=no
+root@client:~# 
+root@client:~# cat /etc/systemd/system/borg-backup.timer
+[Unit]
+Description=Borg Backup
+After=network.target
+
+[Timer]
+OnUnitActiveSec=5min
+Persistent=true
+Unit=borg-backup.service
+
+[Install]
+WantedBy=timers.target
+root@client:~#
+
+```
+
+Конфигурируем ротацию логов:
+
+```
+root@client:~# cat > /etc/logrotate.d/borg-backup
+/var/log/borg/borg-backup.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 root adm
+}
+root@client:~# 
+```
+
+Проверяем вручную запуск сервиса, затем запускаем таймер, проверяем наличие сообщений в файле лога, в journalctl и в syslog:
+
+```
+root@client:~# systemctl daemon-reload
+root@client:~# 
+root@client:~# systemctl enable borg-backup.service
+The unit files have no installation config (WantedBy=, RequiredBy=, Also=,
+Alias= settings in the [Install] section, and DefaultInstance= for template
+units). This means they are not meant to be enabled using systemctl.
+ 
+Possible reasons for having this kind of units are:
+• A unit may be statically enabled by being symlinked from another unit's
+  .wants/ or .requires/ directory.
+• A unit's purpose may be to act as a helper for some other unit which has
+  a requirement dependency on it.
+• A unit may be started when needed via activation (socket, path, timer,
+  D-Bus, udev, scripted systemctl call, ...).
+• In case of template units, the unit is meant to be enabled with some
+  instance name specified.
+root@client:~# 
+root@client:~# 
+root@client:~# systemctl start borg-backup.service
+root@client:~# 
+root@client:~# systemctl status borg-backup.service
+○ borg-backup.service - Borg Backup
+     Loaded: loaded (/etc/systemd/system/borg-backup.service; static)
+     Active: inactive (dead)
+
+Oct 24 16:33:13 client borg-backup-run.sh[3090]:                        Original size      Compressed size    Deduplicated s>
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: This archive:                2.29 MB              1.03 MB                98>
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: All archives:                4.57 MB              2.06 MB              1.15>
+Oct 24 16:33:13 client borg-backup-run.sh[3090]:                        Unique chunks         Total chunks
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Chunk index:                     762                 1593
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: --------------------------------------------------------------------------->
+Oct 24 16:33:16 client borg-backup[3100]: [2026-10-24 16:33:16] === END Borg backup ===
+Oct 24 16:33:16 client systemd[1]: borg-backup.service: Deactivated successfully.
+Oct 24 16:33:16 client systemd[1]: Finished Borg Backup.
+Oct 24 16:33:16 client systemd[1]: borg-backup.service: Consumed 2.208s CPU time.
+root@client:~# 
+root@client:~# 
+root@client:~# 
+root@client:~# systemctl daemon-reload
+root@client:~# 
+root@client:~# 
+root@client:~# cat /etc/systemd/system/borg-backup.timer
+[Unit]
+Description=Borg Backup
+After=network.target
+
+[Timer]
+OnUnitActiveSec=5min
+Persistent=true
+Unit=borg-backup.service
+
+[Install]
+WantedBy=timers.target
+root@client:~# 
+root@client:~# systemctl stop borg-backup.timer
+root@client:~# systemctl start borg-backup.timer
+root@client:~# 
+root@client:~# systemctl list-timers --all | grep borg
+Sat 2026-10-24 17:02:11 UTC 1min 15s left n/a                         n/a          borg-backup.timer            borg-backup.service
+root@client:~# systemctl list-timers --all | grep borg
+Sat 2026-10-24 17:02:11 UTC 55s left      n/a                         n/a          borg-backup.timer            borg-backup.service
+root@client:~# systemctl list-timers --all | grep borg
+Sat 2026-10-24 17:02:11 UTC 19s left      n/a                         n/a          borg-backup.timer            borg-backup.service
+root@client:~# systemctl list-timers --all | grep borg
+n/a                         n/a           Sat 2026-10-24 17:02:14 UTC 1s ago       borg-backup.timer            borg-backup.service
+root@client:~# systemctl list-timers --all | grep borg
+Sat 2026-10-24 17:07:14 UTC 4min 44s left Sat 2026-10-24 17:02:14 UTC 15s ago      borg-backup.timer            borg-backup.service
+root@client:~# 
+root@client:~# 
+root@client:~# borg list borg@192.168.56.160:/var/backup/
+Enter passphrase for key ssh://borg@192.168.56.160/var/backup: 
+etc-2026-10-24_16:09:03              Sat, 2026-10-24 16:09:16 [56cb5144b11bbdc3f0cd3c9b66dae42c1a9a953c367fb271ac9d9cccd8762777]
+etc-2026-10-24_17-02-14              Sat, 2026-10-24 17:02:16 [ffbec918ea950d3531ec4231be176550c961abd86e1570122380b3ebcca0bd1a]
+root@client:~# systemctl list-timers --all | grep borg
+Sat 2026-10-24 17:07:14 UTC 2min 56s left Sat 2026-10-24 17:02:14 UTC 2min 3s ago  borg-backup.timer            borg-backup.service
+root@client:~# systemctl list-timers --all | grep borg
+n/a                         n/a           Sat 2026-10-24 17:07:26 UTC 15ms ago    borg-backup.timer            borg-backup.service
+root@client:~# 
+root@client:~# 
+root@client:~# 
+root@client:~# 
+root@client:~# borg list borg@192.168.56.160:/var/backup/
+Enter passphrase for key ssh://borg@192.168.56.160/var/backup: 
+etc-2026-10-24_16:09:03              Sat, 2026-10-24 16:09:16 [56cb5144b11bbdc3f0cd3c9b66dae42c1a9a953c367fb271ac9d9cccd8762777]
+etc-2026-10-24_17-07-26              Sat, 2026-10-24 17:07:27 [998fb3fee3bad8c5310d6a1032a90141e0d9b8109c67890b8d84fcae06ff815d]
+root@client:~# 
+root@client:~# borg list borg@192.168.56.160:/var/backup/
+Enter passphrase for key ssh://borg@192.168.56.160/var/backup: 
+etc-2026-10-24_16:09:03              Sat, 2026-10-24 16:09:16 [56cb5144b11bbdc3f0cd3c9b66dae42c1a9a953c367fb271ac9d9cccd8762777]
+etc-2026-10-24_17-07-26              Sat, 2026-10-24 17:07:27 [998fb3fee3bad8c5310d6a1032a90141e0d9b8109c67890b8d84fcae06ff815d]
+root@client:~# 
+root@client:~# touch /etc/test_file
+root@client:~# 
+root@client:~# systemctl list-timers --all | grep borg
+Sat 2026-10-24 17:12:26 UTC 31s left      Sat 2026-10-24 17:07:26 UTC 4min 28s ago borg-backup.timer            borg-backup.service
+root@client:~# 
+root@client:~# 
+root@client:~# systemctl list-timers --all | grep borg
+Sat 2026-10-24 17:17:31 UTC 4min 50s left Sat 2026-10-24 17:12:31 UTC 9s ago      borg-backup.timer            borg-backup.service
+root@client:~# 
+root@client:~# tail -n 50 /var/log/borg/borg-backup.log
+[2026-10-24 16:33:10] === START Borg backup ===
+[2026-10-24 16:33:10] REPO=borg@192.168.56.160:/var/backup TARGET=/etc ARCHIVE=etc-2026-10-24_16-33-10
+------------------------------------------------------------------------------
+Repository: ssh://borg@192.168.56.160/var/backup
+Archive name: etc-2026-10-24_16-33-10
+Archive fingerprint: fbec18cf2f8c485e4561c56dba1398536de31e308f3109b781d6497cc18fed8b
+Time (start): Sat, 2026-10-24 16:33:12
+Time (end):   Sat, 2026-10-24 16:33:12
+Duration: 0.31 seconds
+Number of files: 807
+Utilization of max. archive size: 0%
+------------------------------------------------------------------------------
+                       Original size      Compressed size    Deduplicated size
+This archive:                2.29 MB              1.03 MB                983 B
+All archives:                4.57 MB              2.06 MB              1.15 MB
+
+                       Unique chunks         Total chunks
+Chunk index:                     762                 1593
+------------------------------------------------------------------------------
+[2026-10-24 16:33:16] === END Borg backup ===
+root@client:~# 
+root@client:~# 
+root@client:~# journalctl -u borg-backup.service -n 30
+Oct 24 16:33:10 client systemd[1]: Starting Borg Backup...
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: --------------------------------------------------------------------------->
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Repository: ssh://borg@192.168.56.160/var/backup
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Archive name: etc-2026-10-24_16-33-10
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Archive fingerprint: fbec18cf2f8c485e4561c56dba1398536de31e308f3109b781d649>
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Time (start): Sat, 2026-10-24 16:33:12
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Time (end):   Sat, 2026-10-24 16:33:12
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Duration: 0.31 seconds
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Number of files: 807
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Utilization of max. archive size: 0%
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: --------------------------------------------------------------------------->
+Oct 24 16:33:13 client borg-backup-run.sh[3090]:                        Original size      Compressed size    Deduplicated s>
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: This archive:                2.29 MB              1.03 MB                98>
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: All archives:                4.57 MB              2.06 MB              1.15>
+Oct 24 16:33:13 client borg-backup-run.sh[3090]:                        Unique chunks         Total chunks
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: Chunk index:                     762                 1593
+Oct 24 16:33:13 client borg-backup-run.sh[3090]: --------------------------------------------------------------------------->
+Oct 24 16:33:16 client borg-backup[3100]: [2026-10-24 16:33:16] === END Borg backup ===
+Oct 24 16:33:16 client systemd[1]: borg-backup.service: Deactivated successfully.
+Oct 24 16:33:16 client systemd[1]: Finished Borg Backup.
+Oct 24 16:33:16 client systemd[1]: borg-backup.service: Consumed 2.208s CPU time.
+root@client:~# 
+root@client:~# 
+root@client:~# grep borg-backup /var/log/syslog
+Oct 24 16:33:10 vagrant borg-backup: [2026-10-24 16:33:10] === START Borg backup ===
+Oct 24 16:33:10 vagrant borg-backup: [2026-10-24 16:33:10] REPO=borg@192.168.56.160:/var/backup TARGET=/etc ARCHIVE=etc-2026-10-24_16-33-10
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: ------------------------------------------------------------------------------
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: Repository: ssh://borg@192.168.56.160/var/backup
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: Archive name: etc-2026-10-24_16-33-10
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: Archive fingerprint: fbec18cf2f8c485e4561c56dba1398536de31e308f3109b781d6497cc18fed8b
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: Time (start): Sat, 2026-10-24 16:33:12
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: Time (end):   Sat, 2026-10-24 16:33:12
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: Duration: 0.31 seconds
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: Number of files: 807
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: Utilization of max. archive size: 0%
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: ------------------------------------------------------------------------------
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]:                        Original size      Compressed size    Deduplicated size
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: This archive:                2.29 MB              1.03 MB                983 B
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: All archives:                4.57 MB              2.06 MB              1.15 MB
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]:                        Unique chunks         Total chunks
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: Chunk index:                     762                 1593
+Oct 24 16:33:13 vagrant borg-backup-run.sh[3090]: ------------------------------------------------------------------------------
+Oct 24 16:33:16 vagrant borg-backup: [2026-10-24 16:33:16] === END Borg backup ===
+Oct 24 16:33:16 vagrant systemd[1]: borg-backup.service: Deactivated successfully.
+Oct 24 16:33:16 vagrant systemd[1]: borg-backup.service: Consumed 2.208s CPU time.
+root@client:~# 
+```
+
+Проверяем работу ротации логов:
+
+```
+root@client:~# ll /var/log/borg/
+total 20
+drwxr-xr-x 2 root root    4096 Oct 24 16:33 ./
+drwxrwxr-x 8 root syslog  4096 Oct 24 16:33 ../
+-rw-r--r-- 1 root root   11200 Oct 24 17:39 borg-backup.log
+root@client:~# 
+root@client:~# logrotate -d /etc/logrotate.d/borg-backup
+WARNING: logrotate in debug mode does nothing except printing debug messages!  Consider using verbose mode (-v) instead if this is not what you want.
+
+reading config file /etc/logrotate.d/borg-backup
+Reading state from file: /var/lib/logrotate/status
+Allocating hash table for state file, size 64 entries
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+Creating new state
+
+Handling 1 logs
+
+rotating pattern: /var/log/borg/borg-backup.log  after 1 days (7 rotations)
+empty log files are not rotated, old logs are removed
+considering log /var/log/borg/borg-backup.log
+Creating new state
+  Now: 2026-10-24 17:39
+  Last rotated at 2026-10-24 17:00
+  log does not need rotating (log has already been rotated)
+root@client:~# 
+root@client:~# ll /var/log/borg/
+total 20
+drwxr-xr-x 2 root root    4096 Oct 24 16:33 ./
+drwxrwxr-x 8 root syslog  4096 Oct 24 16:33 ../
+-rw-r--r-- 1 root root   11200 Oct 24 17:39 borg-backup.log
+root@client:~# ll /var/log/borg/
+total 24
+drwxr-xr-x 2 root root    4096 Oct 24 16:33 ./
+drwxrwxr-x 8 root syslog  4096 Oct 24 16:33 ../
+-rw-r--r-- 1 root root   13440 Oct 24 17:49 borg-backup.log
+root@client:~# 
+```
+
+**Примечание:** восстановление из бэкапа - возможны следующие варианты:
+
+***Вариант А:*** восстановить один файл (самый частый случай)
+
+Допустим, ты случайно удалил /etc/hostname и хочешь вернуть именно его:
+
+```
+borg extract borg@192.168.56.160:/var/backup::etc-2026-10-24_09:48:12 etc/hostname
+```
+
+Borg восстановит файл в текущую директорию как etc/hostname. Дальше ты сам решаешь, куда его положить (например, cp etc/hostname /etc/).
+
+Важно: всегда сначала восстанавливай во временную папку или в текущий каталог, а не сразу поверх существующих файлов. Так ты не перезапишешь что-то лишнее.
+
+***Вариант Б:*** восстановить всю директорию
+
+```
+borg extract borg@192.168.56.160:/var/backup::etc-2026-10-24_09:48:12 etc
+```
+
+Восстановится вся папка etc (с подпапками и файлами) относительно текущей директории.
+
+***Вариант В:*** восстановить в конкретную целевую директорию
+
+Чтобы не гадать, куда оно упадёт, явно задай путь:
+
+```
+mkdir -p /tmp/restore-etc
+borg extract borg@192.168.56.160:/var/backup::etc-2026-10-24_09:48:12 --paths /tmp/restore-etc etc
+```
+
+Флаг --paths говорит Borg, куда класть файлы. Внутри /tmp/restore-etc появится структура etc/....
+
+***Вариант Г:*** примонтировать бэкап через монтирование (FUSE)
+
+Если хочется посмотреть бэкап как обычную файловую систему (удобно для поиска «а где там лежит этот конфиг»):
+
+```
+mkdir -p /mnt/borg-restore
+borg mount borg@192.168.56.160:/var/backup::etc-2026-10-24_09:48:12 /mnt/borg-restore
+```
+
+Теперь можно ходить по /mnt/borg-restore как по обычной папке: ls, cat, grep. Когда закончил:
+
+```
+borg umount /mnt/borg-restore
+```
+
+Монтирование требует FUSE (fuse3 или fuse). Если его нет — ставь через apt/dnf (пакет fuse3).
+
+#### Проверка целостности перед восстановлением
+
+Перед массовым восстановлением полезно проверить репозиторий:
+
+```
+borg check borg@192.168.56.160:/var/backup --archives-only
+```
+
+    --repository-only — проверка структуры репозитория.
+    
+    --archives-only — проверка самих архивов.
+    
+    Без флага — полная проверка (долго на больших репозиториях).
+
+#### Практический пример восстановления
+
+Допустим, на одном из мини‑ПК ты случайно стёр конфиги Zabbix. У тебя есть архив zabbix-conf-2026-10-24_12:00:00.
+
+    Смотрим, что внутри:
+    
+```
+    borg list borg@192.168.56.160:/var/backup::zabbix-conf-2026-10-24_12:00:00
+```
+
+    Восстанавливаем в /tmp:
+
+```
+    mkdir /tmp/zabbix-restore
+    borg extract borg@192.168.56.160:/var/backup::zabbix-conf-2026-10-24_12:00:00 --paths /tmp/zabbix-restore etc/zabbix
+```
+
+    Проверяем файлы, затем копируем:
+
+```
+    cp -r /tmp/zabbix-restore/etc/zabbix/* /etc/zabbix/
+```
+
+    Перезапускаем Zabbix, если нужно.
+
+**Примечание:** Перенос бэкапов
+
+Есть три рабочих способа перенести бэкапы Borg на другой диск или сервер — под разные задачи.
+
+#### Способ 1. borg transfer — лучший для миграции репозитория (сохраняет дедупликацию)
+
+Это штатный способ Borg для переноса архивов между репозиториями. Он не копирует файлы как есть, а переносит только те чанки, которых ещё нет в целевом репозитории — дедупликация остаётся.
+
+##### Шаг 1. Подготовить целевой репозиторий
+
+На новом диске/сервере создай пустой репозиторий с тем же типом шифрования, что и у исходного:
+
+```
+# Если у тебя repokey:
+borg init --encryption=repokey borg@new-server:/var/backup_new
+
+# Если keyfile (и ключ будет отдельно):
+borg init --encryption=keyfile borg@new-server:/var/backup_new
+```
+
+При repokey попросит passphrase — вводи ту же, что у старого репозитория. Это нужно, чтобы ключи дедупликации совпадали.
+
+##### Шаг 2. Перенести архивы
+
+С любой машины, где есть доступ к обоим репозиториям (или через SSH к новому серверу):
+
+```
+borg transfer --other-repo=borg@old-server:/var/backup borg@new-server:/var/backup_new
+```
+    Сначала запусти с --dry-run, чтобы увидеть, что будет перенесено:
+
+```   
+    borg transfer --dry-run --other-repo=borg@old-server:/var/backup borg@new-server:/var/backup_new
+```
+    Если всё ок — убери --dry-run и запускай.
+
+Плюсы:
+
+   - Сохраняется дедупликация: если в будущем будешь писать в новый репозиторий, он продолжит дедуплицировать против старых данных.
+     
+   - Можно запускать несколько раз: недокачанные архивы подхватываются, ничего не ломается.
+     
+   - Работает даже при частичных сбоях: незавершённые архивы не появляются в целевом репо.
+
+Минусы:
+
+    - Нужно, чтобы версии Borg на обоих концах были совместимы.
+    
+    - Для keyfile важно, чтобы ключ был доступен на машине, с которой делаешь transfer.
+
+
+#### Способ 2. Простое копирование папки (быстро, но без дедупликации между репозиториями)
+
+Если репозиторий не очень большой и дедупликация между старым и новым не нужна, можно просто скопировать папку.
+
+```
+rsync -av --no-perms borg@old-server:/var/backup/ borg@new-server:/var/backup_new/
+```
+
+Или локально (если переносишь на другой диск на том же сервере):
+
+```
+cp -a /var/backup /var/backup_new
+chown -R borg:borg /var/backup_new
+chmod 700 /var/backup_new
+find /var/backup_new -type f -exec chmod 600 {} \;
+```
+
+Важно: после копирования обязательно проверь права и владельца — Borg очень чувствителен к ним.
+
+Когда это уместно:
+
+   - Быстрый перенос на другой диск в рамках одного сервера.
+     
+   - Временная копия для теста/восстановления.
+
+   - Не планируешь дальше писать в старый репозиторий и дедупликация не важна.
+
+
+#### Способ 3. borg copy — если нужно перенести отдельные архивы
+
+Если нужно не всё подряд, а конкретные точки восстановления (например, только архивы за последние 7 дней):
+
+```
+borg copy borg@old-server:/var/backup::etc-2026-10-24_09:48:12 borg@new-server:/var/backup_new::etc-2026-10-24_09:48:12
+```
+
+Можно делать в цикле по списку архивов. Это удобно, когда переносишь выборочно, но для полной миграции лучше transfer.
