@@ -202,7 +202,16 @@ VBoxManage hostonlyif remove vboxnet0
 sudo ip link delete vboxnet0
 ```
 
-После запуска с вышеприведённым Vagrantfile ВМ создаются, также создаётся диск в ВМ backup:
+
+**Примечание:** vagrant в libvirt сам не умеет создавать диски при создании виртуальных машин. Поэтому перед запуском создания ВМ в libvirt/KVM
+необходимо вручную создать диск командой
+
+```
+# Для libvirt Vagrant не умеет сам создавать диск — его нужно создать заранее на хосте командой:
+qemu-img create -f qcow2 backup_disk.qcow2 5G
+```
+
+После запуска с вышеприведённым Vagrantfile ВМ создаются, также в virtualbox создаётся диск ВМ backup.
 
 ```
 [admin_insta11@mv334 backups_lab]$ VAGRANT_BOX=ubuntu-22.04-virtualbox vagrant up
@@ -451,7 +460,7 @@ backup | SUCCESS => {
 Для монтирования и форматирования созданного диска в ВМ backup используется следующий playbook:
 
 ```
-[admin_insta11@mv334 backups_lab]$ cat playbook.yml 
+[admin_insta11@mv334 backups_lab]$ cat playbook-mount-disk.yml 
 - name: Prepare and mount backup disk on backup VM
   hosts: backup
   become: true
@@ -500,4 +509,93 @@ backup | SUCCESS => {
       tags:
         - mount
         - fstab
-```1
+```
+
+При запуске playbook все задачи выполняются, после этого в ВМ диск примонтирован и доступен. При повторном запуска этого плейбука задачи повторно уже не выполняются из-за индепонентности:
+
+```
+[admin_insta11@mv334 backups_lab]$ ansible-playbook -i inventory.ini playbook.yml
+
+PLAY [Prepare and mount backup disk on backup VM] ********************************************************************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************************************************************
+ok: [backup]
+
+TASK [Create GPT partition on disk] **********************************************************************************************************************************************************
+ok: [backup]
+
+TASK [Create ext4 filesystem on partition] ***************************************************************************************************************************************************
+changed: [backup]
+
+TASK [Ensure mount directory exists] *********************************************************************************************************************************************************
+changed: [backup]
+
+TASK [Mount filesystem] **********************************************************************************************************************************************************************
+changed: [backup]
+
+PLAY RECAP ***********************************************************************************************************************************************************************************
+backup                     : ok=5    changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[admin_insta11@mv334 backups_lab]$ vagrant ssh backup
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Sat Oct 24 06:27:50 AM UTC 2026
+
+  System load:           0.09
+  Usage of /:            16.2% of 30.34GB
+  Memory usage:          17%
+  Swap usage:            0%
+  Processes:             143
+  Users logged in:       0
+  IPv4 address for eth0: 10.0.2.15
+  IPv6 address for eth0: fd17:625c:f037:2:a00:27ff:fe16:ddef
+
+
+This system is built by the Bento project by Chef Software
+More information can be found at https://github.com/chef/bento
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Sat Oct 24 06:27:55 2026 from 192.168.56.1
+vagrant@backup:~$ df -h
+Filesystem                         Size  Used Avail Use% Mounted on
+tmpfs                              144M  1.1M  143M   1% /run
+/dev/mapper/ubuntu--vg-ubuntu--lv   31G  5.0G   24G  18% /
+tmpfs                              718M     0  718M   0% /dev/shm
+tmpfs                              5.0M     0  5.0M   0% /run/lock
+/dev/sda2                          2.0G  131M  1.7G   8% /boot
+vagrant                            156G   77G   79G  50% /vagrant
+tmpfs                              144M  8.0K  144M   1% /run/user/1000
+/dev/sdb1                          4.9G   24K  4.6G   1% /data
+vagrant@backup:~$ 
+vagrant@backup:~$ exit
+logout
+[admin_insta11@mv334 backups_lab]$ 
+[admin_insta11@mv334 backups_lab]$ ansible-playbook -i inventory.ini playbook.yml
+
+PLAY [Prepare and mount backup disk on backup VM] ********************************************************************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************************************************************
+ok: [backup]
+
+TASK [Create GPT partition on disk] **********************************************************************************************************************************************************
+ok: [backup]
+
+TASK [Create ext4 filesystem on partition] ***************************************************************************************************************************************************
+ok: [backup]
+
+TASK [Ensure mount directory exists] *********************************************************************************************************************************************************
+ok: [backup]
+
+TASK [Mount filesystem] **********************************************************************************************************************************************************************
+ok: [backup]
+
+PLAY RECAP ***********************************************************************************************************************************************************************************
+backup                     : ok=5    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[admin_insta11@mv334 backups_lab]$ 
+```
+
