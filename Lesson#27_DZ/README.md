@@ -313,7 +313,7 @@ VM, run `vagrant status NAME`.
 
 #### 1.2 Провизионинг ВМ средствами ansible
 
-##### 1.2.1 Доступ ansible на ВМ с использованием ключей и логина, созданного vagrant
+##### 1.2.1 Доступ ansible на ВМ с использованием ключей и пользователя, созданного vagrant
 
 При создании ВМ vagrant также создал себе в этих ВМ для доступа пользователя vagrant с необходимыми правами,
 а также:
@@ -626,7 +626,7 @@ borg@backup:~$ chmod 700 .ssh
 borg@backup:~$ chmod 600 .ssh/authorized_keys
 ```
 
-На ВМ client генерируем клучи и конфигурируем аутентификацию по ключам из пользователя root на клиенте к пользователю borg на сервере backup:
+На ВМ client генерируем ключи и конфигурируем аутентификацию по ключам из пользователя root на клиенте к пользователю borg на сервере backup:
 
 ```
 root@client:~# ssh-keygen -t ed25519
@@ -671,14 +671,12 @@ borg@backup:~$ exit
 logout
 Connection to 192.168.56.160 closed.
 root@client:~# 
-root@client:~# 
-root@client:~# 
 root@client:~# ssh -i /root/.ssh/id_ed25519 borg@192.168.56.160 whoami
 borg
 root@client:~# 
 ```
 
-После этого файл authorized_keys на сервере выглядит следующим образом стандртно:
+После этого файл authorized_keys на сервере backup выглядит следующим образом стандартно:
 
 ```
 borg@backup:~$ cat .ssh/authorized_keys
@@ -687,7 +685,7 @@ borg@backup:~$
 ```
 
 Далее на сервере ограничиваем права данного публичного ключа выполнением только резервирования borg - после этого при 
-заходе с client на backup с данным публичным ключом авторизации вместо интерактивной консоли будет выполняться команда borg:
+заходе с client на backup с данным публичным ключом авторизации вместо интерактивной консоли Linux будет выполняться команда borg:
 
 ```
 borg@backup:~$ cat .ssh/authorized_keys
@@ -699,6 +697,9 @@ borg@backup:~$ cat .ssh/authorized_keys
 #ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFL92VLvEp43DQ4ZvnCPq6puYXEDjfEOtbX0ChiOnho1 root@client
 command="borg serve --restrict-to-repo /var/backup",restrict ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFL92VLvEp43DQ4ZvnCPq6puYXEDjfEOtbX0ChiOnho1 root@client
 borg@backup:~$
+
+
+# Теперь при заходе с client на backup с авторизацией по тому же ключу
 
 root@client:~# ssh -i /root/.ssh/id_ed25519 borg@192.168.56.160 whoami
 usage: borg [-V] [-h] [--critical] [--error] [--warning] [--info] [--debug]
@@ -714,11 +715,6 @@ Borg - Deduplicated Backups
 
 options:
 <...>
-```
-
-
-
-```
  
 root@client:~# ssh borg@192.168.56.160 whoami
 usage: borg [-V] [-h] [--critical] [--error] [--warning] [--info] [--debug]
@@ -740,7 +736,7 @@ options:
 
 #### 2.2 Настраиваем резервирование
 
-На клиенте 
+На клиенте выполняем команды для создания и просмотра бэкапа:
 
 ```
 root@client:~# borg init --encryption=repokey borg@192.168.56.160:/var/backup/
@@ -853,16 +849,12 @@ All archives:                2.28 MB              1.03 MB              1.07 MB
                        Unique chunks         Total chunks
 Chunk index:                     757                  795
 root@client:~# 
-root@client:~# 
-root@client:~# echo $BORG_PASSPHRASE
-
-root@client:~# 
 ```
 
-#### 2.3 Настраиваем сервис и таймер systemctl
+#### 2.3 Настраиваем сервис и таймер systemctl для создания бэкапов по расписанию
 
-На клиенте делаем скрипт /usr/local/bin/borg-backup-run.sh , который будет запускаться сервисом systemctl, следующего содержания. Также создаём файл с хранящимся в нём passphrase и правами 600
-для исключения утечки пароля на бэкап
+На клиенте делаем скрипт /usr/local/bin/borg-backup-run.sh , который будет запускаться сервисом systemctl. Также создаём файл /etc/borg/passphrase с хранящимся в нём passphrase и правами 600
+для исключения утечки пароля на бэкап.
 
 Скрипт /usr/local/bin/borg-backup-run.sh читает passphrase из файла /etc/borg/passphrase , создаёт очередной бэкап, а также записывает логи в локальный файл лога, а также в syslog :
 
@@ -871,7 +863,7 @@ root@client:~# cat /usr/local/bin/borg-backup-run.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${REPO:-"borg@192.168.11.160:/var/backup"}"
+REPO="${REPO:-"borg@192.168.56.160:/var/backup"}"
 BACKUP_TARGET="${BACKUP_TARGET:-"/etc"}"
 LOG_FILE="/var/log/borg/borg-backup.log"
 PASSFILE="/etc/borg/passphrase"
@@ -1173,29 +1165,6 @@ WARNING: logrotate in debug mode does nothing except printing debug messages!  C
 reading config file /etc/logrotate.d/borg-backup
 Reading state from file: /var/lib/logrotate/status
 Allocating hash table for state file, size 64 entries
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
-Creating new state
 Creating new state
 Creating new state
 
