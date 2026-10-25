@@ -68,6 +68,35 @@
 [admin_insta11@mv334 lab-almalinux9]$
 ```
 
+Для использования локально скачаных боксов их нужно добавить в список боксов vagrant командой 'vagrant box add' :
+
+```
+[admin_insta11@mv334 ~]$ vagrant box add --name almalinux9-stand /distrib/vagrant_boxes/almalinux-9-9.8.20260810-amd64-libvirt.box
+==> box: Box file was not detected as metadata. Adding it directly...
+==> box: Adding box 'almalinux9-stand' (v0) for provider: 
+    box: Unpacking necessary files from: file:///distrib/vagrant_boxes/almalinux-9-9.8.20260810-amd64-libvirt.box
+==> box: Successfully added box 'almalinux9-stand' (v0) for ''!
+[admin_insta11@mv334 ~]$ vagrant box add --name almalinux9-stand-vb /distrib/vagrant_boxes/almalinux-9-9.8.20260810-amd64-virtualbox.box
+==> box: Box file was not detected as metadata. Adding it directly...
+==> box: Adding box 'almalinux9-stand-vb' (v0) for provider: 
+    box: Unpacking necessary files from: file:///distrib/vagrant_boxes/almalinux-9-9.8.20260810-amd64-virtualbox.box
+==> box: Successfully added box 'almalinux9-stand-vb' (v0) for ''!
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ vagrant box add --name ubuntu-22.04-virtualbox /distrib/vagrant_boxes/bento-ubuntu-22.04-202510.26.0-amd64-virtualbox.box 
+==> box: Box file was not detected as metadata. Adding it directly...
+==> box: Adding box 'ubuntu-22.04-virtualbox' (v0) for provider: 
+    box: Unpacking necessary files from: file:///distrib/vagrant_boxes/bento-ubuntu-22.04-202510.26.0-amd64-virtualbox.box
+==> box: Successfully added box 'ubuntu-22.04-virtualbox' (v0) for ''!
+[admin_insta11@mv334 ~]$ 
+[admin_insta11@mv334 ~]$ vagrant box list
+almalinux9-stand        (libvirt, 0)
+almalinux9-stand-vb     (virtualbox, 0)
+ubuntu-22.04-virtualbox (virtualbox, 0)
+[admin_insta11@mv334 ~]$ 
+
+```
+
+
 1.2.2 Создаём директорию для нового проекта и создаём в ней Vagrantfile
 
 Исходный рабочий Vagrantfile из примера, продемонстрированного на занятии, по ссылке https://github.com/pcade/vagrant-examples/tree/main/network-storage-provisioning следующего содержания:
