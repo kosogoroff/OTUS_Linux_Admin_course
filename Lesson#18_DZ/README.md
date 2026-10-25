@@ -1947,6 +1947,36 @@ logout
 [admin_insta11@mv334 lab-almalinux9-kvm]$ 
 ```
 
+Для удобной выгрузки и загрузки драйверов libvirt/kvm рекомендуется добавить в конец файла ~/.bashrc следующие функции:
+
+```
+stop_libvirt_stack() {
+  echo "=== Остановка виртуальных машин ==="
+  sudo bash -c 'for vm in $(virsh list --name); do virsh shutdown "$vm"; done'
+
+  echo "=== Остановка libvirtd и сокетов ==="
+  sudo systemctl stop libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket libvirtd.service
+
+  echo "=== Выгрузка модуля kvm_intel ==="
+  # modprobe -r может не сработать, если модуль используется — покажем ошибку
+  sudo modprobe -r kvm_intel || echo "Предупреждение: модуль kvm_intel не удалось выгрузить (возможно, используется)"
+}
+
+start_libvirt_stack() {
+  echo "=== Загрузка модуля kvm_intel ==="
+  # modprobe 
+  sudo modprobe kvm_intel || echo "Предупреждение: модуль kvm_intel не удалось загрузить"
+
+  echo "=== запуск libvirtd и сокетов ==="
+  sudo systemctl start libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket libvirtd.service
+}
+```
+
+После этого для примения нужно использованть команду 'source ~/.bashrc', и далее можно выгружать и загружать стек libvirt/kvm
+командами stop_libvirt_stack и start_libvirt_stack соответственно.
+
+
+
 ## 3. Организация сети и сетевой связности для при использовании libvirt/kvm и virtuallbox
 
 Понимание организации сети и сетевой связности между виртуальными машинами, хостовой машиной и внешним интернетом важно для дальнейшего обучения - пришлось разобраться с использованием интернета и ИИ.
