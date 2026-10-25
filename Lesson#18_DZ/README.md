@@ -951,6 +951,85 @@ vagrant-libvirt (0.11.2, global)
 export VAGRANT_DEFAULT_PROVIDER=libvirt
 ```
 
+**ВАЖНОЕ ПРИМЕЧАНИЕ:** При установке плагина vagrant-libvirt в REDOS 7.3 со временем возникла проблема: 
+при установке устанавливается более новая версия зависимости nokogiri-1.19.4 , 
+которая требует более новой версии glibc и обновления всей системы.
+
+В такой случае, чтобы избежать обновления всей системы, скачиваем вручную все необходимые плагины и зависимости (включая рабочую версию nokogiri-1.16.5.gem) :
+
+```
+mkdir ~/local_gems
+cd ~/local_gems
+
+wget https://rubygems.org/downloads/vagrant-libvirt-0.11.2.gem
+wget https://rubygems.org/downloads/nokogiri-1.16.5.gem
+wget https://rubygems.org/downloads/mini_portile2-2.8.7.gem
+wget https://rubygems.org/downloads/racc-1.8.1.gem
+wget https://rubygems.org/downloads/diffy-3.4.4.gem
+wget https://rubygems.org/downloads/formatador-1.2.3.gem
+wget https://rubygems.org/downloads/fog-core-2.6.0.gem
+wget https://rubygems.org/downloads/fog-json-1.3.0.gem
+wget https://rubygems.org/downloads/fog-xml-0.1.5.gem
+wget https://rubygems.org/downloads/fog-libvirt-0.15.0.gem
+wget https://rubygems.org/downloads/ruby-libvirt-0.8.4.gem
+wget https://rubygems.org/downloads/xml-simple-1.1.9.gem
+
+[admin_insta11@mv334 local_gems]$ ll
+итого 5124
+-rw-rw-r-- 1 admin_insta11 admin_insta11   17920 июн  9  2025 diffy-3.4.4.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11   47104 мар 29  2025 fog-core-2.6.0.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11    8704 апр 22  2026 fog-json-1.3.0.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11   31744 мар 17  2026 fog-libvirt-0.15.0.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11   11264 мар 29  2025 fog-xml-0.1.5.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11   14336 ноя 11  2025 formatador-1.2.3.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11   37376 мар 29  2025 mini_portile2-2.8.7.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11 4625408 мар 29  2025 nokogiri-1.16.5.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11   65536 мар 29  2025 racc-1.8.1.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11  102912 мар 29  2025 ruby-libvirt-0.8.4.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11  115200 окт 25 16:34 vagrant-libvirt-0.10.0.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11  130048 окт 25 17:03 vagrant-libvirt-0.11.2.gem
+-rw-rw-r-- 1 admin_insta11 admin_insta11   12288 мар 29  2025 xml-simple-1.1.9.gem
+[admin_insta11@mv334 local_gems]$
+```
+
+Удаляем нерабочий плагин со всеми зависимостями, а также для надёжности все директории с гемами:
+
+```
+[admin_insta11@mv334 network_lab]$ vagrant plugin uninstall vagrant-libvirt
+Uninstalling the 'vagrant-libvirt' plugin...
+Successfully uninstalled diffy-3.4.4
+Successfully uninstalled fog-core-2.6.0
+Successfully uninstalled fog-json-1.3.0
+Successfully uninstalled fog-libvirt-0.15.0
+Successfully uninstalled fog-xml-0.1.5
+Successfully uninstalled formatador-1.2.3
+Successfully uninstalled mini_portile2-2.8.7
+Removing nokogiri
+Successfully uninstalled nokogiri-1.19.4
+Removing racc
+Successfully uninstalled racc-1.8.1
+Successfully uninstalled ruby-libvirt-0.8.4
+Successfully uninstalled vagrant-libvirt-0.10.0
+[admin_insta11@mv334 network_lab]$
+[admin_insta11@mv334 local_gems]$ rm -rf ~/.vagrant.d/gems
+[admin_insta11@mv334 local_gems]$ 
+```
+
+И заново ставим плагин, используя локально скачаный плагин и все его зависимости:
+
+```
+[admin_insta11@mv334 local_gems]$ vagrant plugin install --plugin-clean-sources --plugin-source ./ ./vagrant-libvirt-0.11.2.gem
+Installing the './vagrant-libvirt-0.11.2.gem' plugin. This can take a few minutes...
+Building native extensions. This could take a while...
+Building native extensions. This could take a while...
+Building native extensions. This could take a while...
+Installed the plugin 'vagrant-libvirt (0.11.2)'!
+[admin_insta11@mv334 local_gems]$ 
+```
+
+После этого плагин работает нормально.
+
+
 1.1.5  Устанавливаем ansible на Host OS:
 
 ```
