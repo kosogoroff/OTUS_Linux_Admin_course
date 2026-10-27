@@ -86,11 +86,23 @@ Vagrantfile с начальным построением сети
 
 # Решение
 
+
+Схема создаваемой лабораторной сети из задания из методички:
+
+<img width="571" height="729" alt="изображение" src="https://github.com/user-attachments/assets/0793a5a2-c247-4c88-a174-5d4be5fddc11" />
+
+Таблица IP-адресации интерфейсов хостов из методички:
+
+<img width="538" height="442" alt="изображение" src="https://github.com/user-attachments/assets/8cdbbefb-8935-4d84-9873-edcabfa2458b" />
+
+
+
+
 Репозиторий со стендом домашнего задания выложен по ссылке https://github.com/kosogoroff/backups_lab.git
 
 Ниже приведено описание выполнения домашнего задания.
 
-#### 1.1 Создание ВМ и первоначально конфигурирование доступа средствами vagrant
+## 1.1 Создание ВМ и первоначально конфигурирование доступа средствами vagrant
 
 В связи с недоступностью портала https://portal.cloud.hashicorp.com/  и vagrantcloud для проверки и работы заранее локально скачаны несколько Vagrant box для различных версий Linux:
 
@@ -1122,9 +1134,9 @@ logout
 ```
 
 
-#### 1.2 Провизионинг ВМ средствами ansible
+## 1.2 Провизионинг ВМ средствами ansible
 
-##### 1.2.1 Доступ ansible на ВМ с использованием ключей и пользователя, созданного vagrant
+### 1.2.1 Доступ ansible на ВМ с использованием ключей и пользователя, созданного vagrant
 
 При создании ВМ vagrant также создал себе в этих ВМ для доступа пользователя vagrant с необходимыми правами,
 а также:
@@ -1298,8 +1310,7 @@ echo "✅ Готово! Содержимое inventory.ini:"
 cat "$INVENTORY"
 ```
 
-После создания ВМ с помощью 'vagrant up' запускаем данный скрипт, который создаёт файл inventory.ini для использования ansible.
-После создания файла inventory.ini скриптом роверяем доступность всех созданных ВМ для управления с помощью ansible::
+После создания ВМ с помощью 'vagrant up' запускаем данный скрипт, который создаёт файл inventory.ini для использования ansible:
 
 ```
 [admin_insta11@mv334 network_lab]$ ./generate_inventory.sh 
@@ -1326,6 +1337,45 @@ ansible_user=vagrant
 ansible_python_interpreter=/usr/bin/python3
 host_key_checking=False
 [admin_insta11@mv334 network_lab]$
+```
+
+После этого в созданный для inventory.ini список хостов можно добавить дополнительные необходимые секции и параметры:
+
+```
+[admin_insta11@mv334 network_lab]$ #  Далее вручную добавляем в inventory.ini секцию сосписком маршрутизаторов
+[admin_insta11@mv334 network_lab]$ vi inventory.ini
+[admin_insta11@mv334 network_lab]$ 
+[admin_insta11@mv334 network_lab]$ cat inventory.ini
+[vagrant_boxes]
+
+inetRouter ansible_host=127.0.0.1 ansible_port=2222 ansible_private_key_file=/home/admin_insta11/network_lab/.vagrant/machines/inetRouter/virtualbox/private_key
+office1Router ansible_host=127.0.0.1 ansible_port=2202 ansible_private_key_file=/home/admin_insta11/network_lab/.vagrant/machines/office1Router/virtualbox/private_key
+office1Server ansible_host=127.0.0.1 ansible_port=2203 ansible_private_key_file=/home/admin_insta11/network_lab/.vagrant/machines/office1Server/virtualbox/private_key
+office2Router ansible_host=127.0.0.1 ansible_port=2204 ansible_private_key_file=/home/admin_insta11/network_lab/.vagrant/machines/office2Router/virtualbox/private_key
+office2Server ansible_host=127.0.0.1 ansible_port=2205 ansible_private_key_file=/home/admin_insta11/network_lab/.vagrant/machines/office2Server/virtualbox/private_key
+centralServer ansible_host=127.0.0.1 ansible_port=2201 ansible_private_key_file=/home/admin_insta11/network_lab/.vagrant/machines/centralServer/virtualbox/private_key
+centralRouter ansible_host=127.0.0.1 ansible_port=2200 ansible_private_key_file=/home/admin_insta11/network_lab/.vagrant/machines/centralRouter/virtualbox/private_key
+
+[routers]
+inetRouter
+centralRouter
+office1Router
+office2Router
+
+[vagrant_boxes:vars]
+ansible_user=vagrant
+ansible_python_interpreter=/usr/bin/python3
+host_key_checking=False
+[admin_insta11@mv334 network_lab]$
+[admin_insta11@mv334 network_lab]$ cat ansible.cfg
+[defaults]
+inventory = ./inventory.ini
+host_key_checking = False
+```
+
+После создания файла inventory.ini скриптом роверяем доступность всех созданных ВМ для управления с помощью ansible::
+
+```
 [admin_insta11@mv334 network_lab]$ ansible all -m ping
 office2Router | SUCCESS => {
     "changed": false,
@@ -1360,6 +1410,779 @@ centralRouter | SUCCESS => {
 
 Таким образом, необходимый доступ для ansible через credentials, созданные vagrant, настроен.
 
-##### 1.2.2 Провизионинг ВМ backup средствами ansible
+### 1.2.2 Провизионинг ВМ backup средствами ansible
 
-TODO
+Общая структура проекта (vagrant + ansible) приведена ниже:
+
+```
+[admin_insta11@mv334 network_lab]$ 
+[admin_insta11@mv334 network_lab]$ tree
+.
+├── ansible
+│   ├── playbook.yml
+│   └── templates
+│       ├── 00-installer-config.yaml
+│       ├── 50-vagrant_centralRouter.yaml
+│       ├── 50-vagrant_centralServer.yaml
+│       ├── 50-vagrant_inetRouter.yaml
+│       ├── 50-vagrant_office1Router.yaml
+│       ├── 50-vagrant_office1Server.yaml
+│       ├── 50-vagrant_office2Router.yaml
+│       ├── 50-vagrant_office2Server.yaml
+│       └── iptables_rules.ipv4
+├── ansible.cfg
+├── generate_inventory.sh
+├── inventory.ini
+└── Vagrantfile
+
+2 directories, 15 files
+[admin_insta11@mv334 network_lab]$ 
+```
+
+Плейбук playbook.yml для выполнения всех необходимых задач приведён ниже:
+
+```
+---
+- name: Task 1 - NAT on inetRouter
+  hosts: vagrant_boxes
+  become: true
+  tasks:
+
+    # ------------------------------------------------------------------------------------
+    # ЭТАП 1: Отключаем cloud-init, чтобы он не конфликтовал с нашими сетевыми конфигами
+    # ------------------------------------------------------------------------------------
+    
+    - name: Disable cloud-init network configuration
+      copy:
+        dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+        content: |
+          network: {config: disabled}
+        owner: root
+        group: root
+        mode: '0644'
+      tags:
+        - cloud-init-disable
+      register: ci_disable_result
+
+    - name: Clean cloud-init network cache (автоматически убирает/очищает 50-cloud-init.yaml)
+      command: cloud-init clean -c network
+      changed_when: false
+      tags:
+        - cloud-init-disable
+      when: ci_disable_result.changed or ci_disable_result is succeeded
+
+    # ------------------------------------------------------------------
+    #  На inetRouter настраиваем NAT и сервис systemctl для применения правил NAT на iptables
+    # ------------------------------------------------------------------
+
+    - name: Set up NAT on inetRouter
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - src: "iptables_rules.ipv4"
+          dest: "/etc/iptables_rules.ipv4"
+          mode: "0644"
+      when: inventory_hostname == "inetRouter"
+
+    # Для применения правил iptables на inetRouter при загрузке создаём отдельный сервис systemd, выполняющийся после загрузки сети  
+    - name: Create systemd unit for applying NAT rules
+      copy:
+        content: |
+          [Unit]
+          Description=Apply iptables NAT rules
+          After=network.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/sh -c "/sbin/iptables-restore < /etc/iptables_rules.ipv4"
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/iptables-nat.service
+        owner: root
+        group: root
+        mode: "0644"
+      when: inventory_hostname == "inetRouter"
+
+    - name: Enable and start iptables-nat service
+      systemd:
+        name: iptables-nat
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: inventory_hostname == "inetRouter"
+
+
+- name: Task 2 - IP forwarding on all routers
+  hosts: vagrant_boxes
+  become: true
+  tasks:
+    - name: set up forward packages across routers
+      sysctl:
+        name: net.ipv4.conf.all.forwarding
+        value: '1'
+        state: present
+      when: "'routers' in group_names"
+
+
+- name: Task 3 - Disable default route (на всех хостах кроме inetRouter)
+  hosts: vagrant_boxes
+  become: true
+  tasks:
+    - name: disable default route
+      template:
+        src: "00-installer-config.yaml"
+        dest: "/etc/netplan/00-installer-config.yaml"
+        owner: root
+        group: root
+        mode: "0644"
+      when: inventory_hostname != "inetRouter"
+
+    # netplan try интерактивен и будет висеть. Для автоматизации используем apply.
+    - name: apply netplan config
+      command: netplan apply
+      when: inventory_hostname != "inetRouter"
+
+# Для каждого из хостов по его имени применяем соответствующий ему файл /etc/netplan/50-vagrant.yaml
+- name: Task 5 - Add static routes and reboot
+  hosts: vagrant_boxes
+  become: true
+  tasks:
+    - name: add default gateway and static routes for each host
+      template:
+        src: "50-vagrant_{{ inventory_hostname }}.yaml"
+        dest: "/etc/netplan/50-vagrant.yaml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: restart all hosts
+      reboot:
+        reboot_timeout: 600
+
+# После настройки сети устанавливаем пакет traceroute на все хосты
+- name: Task 6 - Install traceroute
+  hosts: vagrant_boxes
+  become: true
+  tasks:
+    - name: Install traceroute
+      apt:
+        name: traceroute
+        state: present
+
+```
+
+
+Ниже приведены файлы для копирования на хосты для конфигурации сетевых интерфейсов и статических маршрутов хостов с помощью /etc/netplan
+в соответствии с планом сети и для конфигурирования правил iptables на inetRouter :
+
+```
+[admin_insta11@mv334 network_lab]$ cd ansible/templates/
+[admin_insta11@mv334 templates]$ 
+[admin_insta11@mv334 templates]$ cat 00-installer-config.yaml
+# This is the network config written by 'subiquity'
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+          use-routes: false
+      dhcp6: false
+  version: 2
+[admin_insta11@mv334 templates]$ 
+[admin_insta11@mv334 templates]$ cat 50-vagrant_inetRouter.yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth0:
+      dhcp4: true
+    eth1:
+      addresses:
+        - 192.168.255.1/30
+      routes:
+        - to: 192.168.0.0/25
+          via: 192.168.255.2
+        - to: 192.168.1.0/24
+          via: 192.168.255.2
+        - to: 192.168.2.0/24
+          via: 192.168.255.2
+        - to: 192.168.255.4/30
+          via: 192.168.255.2
+        - to: 192.168.255.8/30
+          via: 192.168.255.2
+    eth2:
+      addresses:
+        - 192.168.50.10/24
+[admin_insta11@mv334 templates]$ 
+[admin_insta11@mv334 templates]$ cat 50-vagrant_centralRouter.yaml 
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+        - 192.168.255.2/30
+      routes:
+        - to: 0.0.0.0/0
+          via: 192.168.255.1
+    eth2:
+      addresses:
+        - 192.168.0.1/28
+    eth3:
+      addresses:
+        - 192.168.0.33/28
+    eth4:
+      addresses:
+        - 192.168.0.65/26
+    eth5:
+      addresses:
+        - 192.168.255.9/30
+      routes:
+        - to: 192.168.2.0/24
+          via: 192.168.255.10
+    eth6:
+      addresses:
+        - 192.168.255.5/30
+      routes:
+        - to: 192.168.1.0/28
+          via: 192.168.255.6
+    eth7:
+      addresses:
+        - 192.168.50.11/24
+[admin_insta11@mv334 templates]$ 
+[admin_insta11@mv334 templates]$ cat 50-vagrant_office1Router.yaml 
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+        - 192.168.255.10/30
+      routes:
+        - to: 0.0.0.0/0
+          via: 192.168.255.9
+    eth2:
+      addresses:
+        - 192.168.2.1/26
+    eth3:
+      addresses:
+        - 192.168.2.65/26
+    eth4:
+      addresses:
+        - 192.168.2.129/26
+    eth5:
+      addresses:
+        - 192.168.2.193/26
+    eth6:
+      addresses:
+        - 192.168.50.20/24
+[admin_insta11@mv334 templates]$ 
+[admin_insta11@mv334 templates]$ cat 50-vagrant_office2Router.yaml 
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+        - 192.168.255.6/30
+      routes:
+        - to: 0.0.0.0/0
+          via: 192.168.255.5
+    eth2:
+      addresses:
+        - 192.168.1.1/25
+    eth3:
+      addresses:
+        - 192.168.1.129/26
+    eth4:
+      addresses:
+        - 192.168.1.193/26
+    eth5:
+      addresses:
+        - 192.168.50.30/24
+[admin_insta11@mv334 templates]$ 
+[admin_insta11@mv334 templates]$ cat 50-vagrant_centralServer.yaml 
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+        - 192.168.0.2/28
+      routes:
+        - to: 0.0.0.0/0
+          via: 192.168.0.1
+[admin_insta11@mv334 templates]$ 
+[admin_insta11@mv334 templates]$ cat 50-vagrant_office1Server.yaml 
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+        - 192.168.2.130/26
+      routes:
+        - to: 0.0.0.0/0
+          via: 192.168.2.129
+    eth2:
+      addresses:
+        - 192.168.50.21/24
+[admin_insta11@mv334 templates]$ 
+[admin_insta11@mv334 templates]$ cat 50-vagrant_office2Server.yaml 
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+        - 192.168.1.2/25
+      routes:
+        - to: 0.0.0.0/0
+          via: 192.168.1.1
+    eth2:
+      addresses:
+        - 192.168.50.31/24
+[admin_insta11@mv334 templates]$ 
+[admin_insta11@mv334 templates]$ cat iptables_rules.ipv4 
+# Generated by iptables-save v1.8.7 on Sat Oct 14 16:14:36 2023
+*filter
+:INPUT ACCEPT [90:8713]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [54:7429]
+-A INPUT -p icmp -j ACCEPT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT
+COMMIT
+# Completed on Sat Oct 14 16:14:36 2023
+# Generated by iptables-save v1.8.7 on Sat Oct 14 16:14:36 2023
+*nat
+:PREROUTING ACCEPT [1:44]
+:INPUT ACCEPT [1:44]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+-A POSTROUTING ! -d 192.168.0.0/16 -o eth0 -j MASQUERADE
+COMMIT
+# Completed on Sat Oct 14 16:14:36 2023
+[admin_insta11@mv334 templates]$ 
+```
+
+После при выполнении плейбука все задачи выполняются для хостов сети:
+
+```
+[admin_insta11@mv334 network_lab]$ ansible-playbook -i inventory.ini ansible/playbook.yml
+
+PLAY [Task 1 - NAT on inetRouter] ************************************************************************************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************************************************************
+ok: [office2Server]
+ok: [inetRouter]
+ok: [office2Router]
+ok: [office1Server]
+ok: [office1Router]
+ok: [centralRouter]
+ok: [centralServer]
+
+TASK [Disable cloud-init network configuration] **********************************************************************************************************************************************
+ok: [inetRouter]
+ok: [office1Router]
+ok: [office1Server]
+ok: [office2Server]
+ok: [office2Router]
+ok: [centralRouter]
+ok: [centralServer]
+
+TASK [Clean cloud-init network cache (автоматически убирает/очищает 50-cloud-init.yaml)] *****************************************************************************************************
+ok: [inetRouter]
+ok: [office1Server]
+ok: [office1Router]
+ok: [office2Router]
+ok: [office2Server]
+ok: [centralServer]
+ok: [centralRouter]
+
+TASK [Set up NAT on inetRouter] **************************************************************************************************************************************************************
+skipping: [office1Router] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'}) 
+skipping: [office1Server] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'}) 
+skipping: [office2Router] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'}) 
+skipping: [office2Server] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'}) 
+skipping: [centralServer] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'}) 
+skipping: [centralRouter] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'}) 
+ok: [inetRouter] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'})
+
+TASK [Create systemd unit for applying NAT rules] ********************************************************************************************************************************************
+skipping: [office1Router]
+skipping: [office1Server]
+skipping: [office2Router]
+skipping: [office2Server]
+skipping: [centralServer]
+skipping: [centralRouter]
+ok: [inetRouter]
+
+TASK [Enable and start iptables-nat service] *************************************************************************************************************************************************
+skipping: [office1Router]
+skipping: [office1Server]
+skipping: [office2Router]
+skipping: [office2Server]
+skipping: [centralServer]
+skipping: [centralRouter]
+ok: [inetRouter]
+
+PLAY [Task 2 - IP forwarding on all routers] *************************************************************************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************************************************************
+ok: [inetRouter]
+ok: [office1Server]
+ok: [office2Server]
+ok: [office1Router]
+ok: [office2Router]
+ok: [centralServer]
+ok: [centralRouter]
+
+TASK [set up forward packages across routers] ************************************************************************************************************************************************
+skipping: [office1Server]
+skipping: [office2Server]
+skipping: [centralServer]
+ok: [office2Router]
+ok: [office1Router]
+ok: [inetRouter]
+ok: [centralRouter]
+
+PLAY [Task 3 - Disable default route (except inetRouter)] ************************************************************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************************************************************
+ok: [inetRouter]
+ok: [office1Server]
+ok: [office2Server]
+ok: [office1Router]
+ok: [office2Router]
+ok: [centralServer]
+ok: [centralRouter]
+
+TASK [disable default route] *****************************************************************************************************************************************************************
+skipping: [inetRouter]
+ok: [office2Router]
+ok: [office1Server]
+ok: [office1Router]
+ok: [office2Server]
+ok: [centralServer]
+ok: [centralRouter]
+
+TASK [apply netplan config] ******************************************************************************************************************************************************************
+skipping: [inetRouter]
+changed: [office1Server]
+changed: [office1Router]
+changed: [office2Server]
+changed: [office2Router]
+changed: [centralServer]
+changed: [centralRouter]
+
+PLAY [Task 5 - Add static routes and reboot] *************************************************************************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************************************************************
+ok: [office1Server]
+ok: [inetRouter]
+ok: [office2Server]
+ok: [office2Router]
+ok: [office1Router]
+ok: [centralServer]
+ok: [centralRouter]
+
+TASK [add default gateway and static routes for each host] ***********************************************************************************************************************************
+ok: [inetRouter]
+ok: [office1Server]
+ok: [office1Router]
+ok: [office2Router]
+ok: [office2Server]
+ok: [centralServer]
+ok: [centralRouter]
+
+TASK [restart all hosts] *********************************************************************************************************************************************************************
+changed: [office2Server]
+changed: [inetRouter]
+changed: [office2Router]
+changed: [office1Server]
+changed: [office1Router]
+changed: [centralRouter]
+changed: [centralServer]
+
+PLAY [Task 6 - Install traceroute] ***********************************************************************************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************************************************************
+ok: [office1Server]
+ok: [office2Router]
+ok: [office1Router]
+ok: [inetRouter]
+ok: [centralServer]
+ok: [office2Server]
+ok: [centralRouter]
+
+TASK [Install traceroute] ********************************************************************************************************************************************************************
+ok: [inetRouter]
+changed: [office2Router]
+changed: [centralServer]
+changed: [office2Server]
+ok: [centralRouter]
+changed: [office1Router]
+changed: [office1Server]
+
+PLAY RECAP ***********************************************************************************************************************************************************************************
+centralRouter              : ok=13   changed=2    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+centralServer              : ok=12   changed=3    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0   
+inetRouter                 : ok=14   changed=1    unreachable=0    failed=0    skipped=2    rescued=0    ignored=0   
+office1Router              : ok=13   changed=3    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+office1Server              : ok=12   changed=3    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0   
+office2Router              : ok=13   changed=3    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+office2Server              : ok=12   changed=3    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0   
+
+[admin_insta11@mv334 network_lab]$
+```
+
+## Проверка связности сети и выхода в сеть интернет с хостов
+
+После создания и провизионинга сети проверяем таюлицы маршрутов на маршрутизаторах сети, а также связность между хостами сети и выход с хостов в Public internet с помощью утилит ping и traceroute:
+
+```
+[admin_insta11@mv334 network_lab]$ vagrant ssh centralRouter
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Tue Oct 27 17:12:55 2026 from 10.0.2.2
+vagrant@centralRouter:~$ 
+vagrant@centralRouter:~$ ip route
+default via 192.168.255.1 dev eth1 proto static 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+192.168.0.0/28 dev eth2 proto kernel scope link src 192.168.0.1 
+192.168.0.32/28 dev eth3 proto kernel scope link src 192.168.0.33 
+192.168.0.64/26 dev eth4 proto kernel scope link src 192.168.0.65 
+192.168.1.0/28 via 192.168.255.6 dev eth6 proto static 
+192.168.2.0/24 via 192.168.255.10 dev eth5 proto static 
+192.168.50.0/24 dev eth7 proto kernel scope link src 192.168.50.11 
+192.168.255.0/30 dev eth1 proto kernel scope link src 192.168.255.2 
+192.168.255.4/30 dev eth6 proto kernel scope link src 192.168.255.5 
+192.168.255.8/30 dev eth5 proto kernel scope link src 192.168.255.9 
+vagrant@centralRouter:~$ 
+vagrant@centralRouter:~$ exit
+logout
+[admin_insta11@mv334 network_lab]$ 
+[admin_insta11@mv334 network_lab]$ vagrant ssh inetRouter
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Tue Oct 27 17:12:14 2026 from 10.0.2.2
+vagrant@inetRouter:~$ 
+vagrant@inetRouter:~$ 
+vagrant@inetRouter:~$ ip route
+default via 10.0.2.2 dev eth0 proto dhcp src 10.0.2.15 metric 100 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.2 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+192.168.0.0/25 via 192.168.255.2 dev eth1 proto static 
+192.168.1.0/24 via 192.168.255.2 dev eth1 proto static 
+192.168.2.0/24 via 192.168.255.2 dev eth1 proto static 
+192.168.50.0/24 dev eth2 proto kernel scope link src 192.168.50.10 
+192.168.255.0/30 dev eth1 proto kernel scope link src 192.168.255.1 
+192.168.255.4/30 via 192.168.255.2 dev eth1 proto static 
+192.168.255.8/30 via 192.168.255.2 dev eth1 proto static 
+vagrant@inetRouter:~$ 
+vagrant@inetRouter:~$ 
+vagrant@inetRouter:~$ exit
+logout
+[admin_insta11@mv334 network_lab]$ 
+[admin_insta11@mv334 network_lab]$ vagrant ssh office1Router
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Tue Oct 27 17:12:14 2026 from 10.0.2.2
+vagrant@office1Router:~$ 
+vagrant@office1Router:~$ ip route
+default via 192.168.255.9 dev eth1 proto static 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+192.168.2.0/26 dev eth2 proto kernel scope link src 192.168.2.1 
+192.168.2.64/26 dev eth3 proto kernel scope link src 192.168.2.65 
+192.168.2.128/26 dev eth4 proto kernel scope link src 192.168.2.129 
+192.168.2.192/26 dev eth5 proto kernel scope link src 192.168.2.193 
+192.168.50.0/24 dev eth6 proto kernel scope link src 192.168.50.20 
+192.168.255.8/30 dev eth1 proto kernel scope link src 192.168.255.10 
+vagrant@office1Router:~$ 
+vagrant@office1Router:~$ exit
+logout
+[admin_insta11@mv334 network_lab]$ 
+[admin_insta11@mv334 network_lab]$ vagrant ssh office2Router
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Tue Oct 27 17:12:14 2026 from 10.0.2.2
+vagrant@office2Router:~$ 
+vagrant@office2Router:~$ ip route
+default via 192.168.255.5 dev eth1 proto static 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+192.168.1.0/25 dev eth2 proto kernel scope link src 192.168.1.1 
+192.168.1.128/26 dev eth3 proto kernel scope link src 192.168.1.129 
+192.168.1.192/26 dev eth4 proto kernel scope link src 192.168.1.193 
+192.168.50.0/24 dev eth5 proto kernel scope link src 192.168.50.30 
+192.168.255.4/30 dev eth1 proto kernel scope link src 192.168.255.6 
+vagrant@office2Router:~$ 
+vagrant@office2Router:~$ exit
+logout
+[admin_insta11@mv334 network_lab]$ 
+
+
+
+[admin_insta11@mv334 network_lab]$ vagrant ssh office1Server
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Tue Oct 27 17:12:13 2026 from 10.0.2.2
+vagrant@office1Server:~$ 
+vagrant@office1Server:~$ 
+vagrant@office1Server:~$ ping 8.8.8.8
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=252 time=91.5 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=252 time=91.4 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=252 time=91.2 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=252 time=91.0 ms
+^C
+--- 8.8.8.8 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+rtt min/avg/max/mdev = 90.977/91.272/91.549/0.214 ms
+vagrant@office1Server:~$ 
+vagrant@office1Server:~$ ping ya.ru
+PING ya.ru (77.88.55.242) 56(84) bytes of data.
+64 bytes from ya.ru (77.88.55.242): icmp_seq=1 ttl=252 time=83.0 ms
+64 bytes from ya.ru (77.88.55.242): icmp_seq=2 ttl=252 time=83.5 ms
+64 bytes from ya.ru (77.88.55.242): icmp_seq=3 ttl=252 time=83.0 ms
+64 bytes from ya.ru (77.88.55.242): icmp_seq=4 ttl=252 time=82.6 ms
+64 bytes from ya.ru (77.88.55.242): icmp_seq=5 ttl=252 time=83.0 ms
+
+--- ya.ru ping statistics ---
+5 packets transmitted, 5 received, 0% packet loss, time 4006ms
+rtt min/avg/max/mdev = 82.604/83.021/83.485/0.279 ms
+vagrant@office1Server:~$ 
+vagrant@office1Server:~$ traceroute 8.8.8.8
+traceroute to 8.8.8.8 (8.8.8.8), 30 hops max, 60 byte packets
+ 1  _gateway (192.168.2.129)  1.075 ms  0.819 ms  0.801 ms
+ 2  192.168.255.9 (192.168.255.9)  1.845 ms  1.790 ms  1.674 ms
+ 3  192.168.255.1 (192.168.255.1)  2.539 ms  2.422 ms  2.368 ms
+ 4  10.0.2.2 (10.0.2.2)  2.442 ms  2.251 ms  2.183 ms
+ 5  172.17.15.1 (172.17.15.1)  2.872 ms  2.719 ms  2.868 ms
+ 6  192.168.10.14 (192.168.10.14)  2.814 ms  3.400 ms  3.362 ms
+ 7  192.168.200.7 (192.168.200.7)  68.757 ms  68.798 ms  68.720 ms
+ 8  192.168.200.6 (192.168.200.6)  68.495 ms  68.225 ms  68.149 ms
+ 9  192.168.1.3 (192.168.1.3)  69.205 ms  69.143 ms  69.687 ms
+10  Moscow-GIN-PE11-ae4-2499.rosprint.net (195.151.21.1)  69.990 ms  69.441 ms  69.559 ms
+11  Umbrella-PE01-ae1-0.rosprint.net (195.151.241.162)  71.430 ms  71.248 ms  73.023 ms
+12  Moscow-GIN-IX01-ae3-0.rosprint.net (195.151.233.53)  72.570 ms  72.495 ms  74.723 ms
+13  178.18.225.111.ix.dataix.eu (178.18.225.111)  97.402 ms  94.178 ms  96.805 ms
+14  * 178.18.235.253 (178.18.235.253)  94.769 ms  96.813 ms
+15  216.239.57.151 (216.239.57.151)  102.842 ms  96.163 ms 192.178.248.215 (192.178.248.215)  97.237 ms
+16  209.85.242.83 (209.85.242.83)  97.995 ms 142.251.48.45 (142.251.48.45)  93.375 ms 172.253.72.123 (172.253.72.123)  102.188 ms
+17  dns.google (8.8.8.8)  93.280 ms  171.059 ms  96.647 ms
+vagrant@office1Server:~$ 
+vagrant@office1Server:~$ ping 192.168.0.2
+PING 192.168.0.2 (192.168.0.2) 56(84) bytes of data.
+64 bytes from 192.168.0.2: icmp_seq=1 ttl=62 time=2.86 ms
+64 bytes from 192.168.0.2: icmp_seq=2 ttl=62 time=2.71 ms
+64 bytes from 192.168.0.2: icmp_seq=3 ttl=62 time=2.75 ms
+64 bytes from 192.168.0.2: icmp_seq=4 ttl=62 time=2.80 ms
+^C
+--- 192.168.0.2 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+rtt min/avg/max/mdev = 2.706/2.779/2.858/0.056 ms
+vagrant@office1Server:~$ traceroute 192.168.0.2
+traceroute to 192.168.0.2 (192.168.0.2), 30 hops max, 60 byte packets
+ 1  _gateway (192.168.2.129)  0.990 ms  0.882 ms  0.818 ms
+ 2  192.168.255.9 (192.168.255.9)  2.181 ms  1.963 ms  1.893 ms
+ 3  192.168.0.2 (192.168.0.2)  2.253 ms  3.243 ms  3.186 ms
+vagrant@office1Server:~$ 
+vagrant@office1Server:~$ ping 192.168.1.2
+PING 192.168.1.2 (192.168.1.2) 56(84) bytes of data.
+64 bytes from 192.168.1.2: icmp_seq=1 ttl=61 time=4.03 ms
+64 bytes from 192.168.1.2: icmp_seq=2 ttl=61 time=3.55 ms
+64 bytes from 192.168.1.2: icmp_seq=3 ttl=61 time=3.83 ms
+64 bytes from 192.168.1.2: icmp_seq=4 ttl=61 time=3.58 ms
+64 bytes from 192.168.1.2: icmp_seq=5 ttl=61 time=3.75 ms
+^C
+--- 192.168.1.2 ping statistics ---
+5 packets transmitted, 5 received, 0% packet loss, time 4008ms
+rtt min/avg/max/mdev = 3.554/3.746/4.026/0.173 ms
+vagrant@office1Server:~$ traceroute 192.168.1.2
+traceroute to 192.168.1.2 (192.168.1.2), 30 hops max, 60 byte packets
+ 1  _gateway (192.168.2.129)  0.974 ms  0.885 ms  0.862 ms
+ 2  192.168.255.9 (192.168.255.9)  1.389 ms  1.330 ms  1.203 ms
+ 3  192.168.255.6 (192.168.255.6)  2.271 ms  2.205 ms  1.969 ms
+ 4  192.168.1.2 (192.168.1.2)  2.586 ms  2.769 ms  2.699 ms
+vagrant@office1Server:~$ 
+vagrant@office1Server:~$ exit
+logout
+[admin_insta11@mv334 network_lab]$ vagrant ssh centralServer
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Tue Oct 27 17:12:24 2026 from 10.0.2.2
+vagrant@centralServer:~$ 
+vagrant@centralServer:~$ ping ya.ru
+PING ya.ru (5.255.255.242) 56(84) bytes of data.
+64 bytes from ya.ru (5.255.255.242): icmp_seq=1 ttl=253 time=73.8 ms
+64 bytes from ya.ru (5.255.255.242): icmp_seq=2 ttl=253 time=73.5 ms
+64 bytes from ya.ru (5.255.255.242): icmp_seq=3 ttl=253 time=73.8 ms
+64 bytes from ya.ru (5.255.255.242): icmp_seq=4 ttl=253 time=73.7 ms
+64 bytes from ya.ru (5.255.255.242): icmp_seq=5 ttl=253 time=73.8 ms
+64 bytes from ya.ru (5.255.255.242): icmp_seq=6 ttl=253 time=73.2 ms
+64 bytes from ya.ru (5.255.255.242): icmp_seq=7 ttl=253 time=73.6 ms
+^C
+--- ya.ru ping statistics ---
+7 packets transmitted, 7 received, 0% packet loss, time 6008ms
+rtt min/avg/max/mdev = 73.240/73.632/73.842/0.207 ms
+vagrant@centralServer:~$ 
+vagrant@centralServer:~$ traceroute ya.ru
+traceroute to ya.ru (77.88.44.242), 30 hops max, 60 byte packets
+ 1  _gateway (192.168.0.1)  0.910 ms  0.822 ms  0.753 ms
+ 2  192.168.255.1 (192.168.255.1)  2.696 ms  2.634 ms  2.582 ms
+ 3  10.0.2.2 (10.0.2.2)  2.442 ms  2.232 ms  2.013 ms
+ 4  172.17.15.1 (172.17.15.1)  2.674 ms  2.630 ms  2.826 ms
+ 5  192.168.10.14 (192.168.10.14)  3.308 ms  3.264 ms  3.153 ms
+ 6  192.168.200.7 (192.168.200.7)  69.204 ms  69.052 ms  68.634 ms
+ 7  192.168.200.6 (192.168.200.6)  67.468 ms  67.800 ms  67.617 ms
+ 8  192.168.1.3 (192.168.1.3)  70.886 ms  70.341 ms  70.966 ms
+ 9  Moscow-GIN-PE11-ae4-2499.rosprint.net (195.151.21.1)  85.456 ms  70.229 ms  84.972 ms
+10  Umbrella-PE01-ae1-0.rosprint.net (195.151.241.162)  71.656 ms  71.528 ms  71.462 ms
+11  Moscow-GIN-IX01-ae3-0.rosprint.net (195.151.233.53)  73.677 ms  73.611 ms  71.505 ms
+12  styri.yndx.net (195.208.208.116)  71.100 ms  70.994 ms  75.247 ms
+13  * * *
+^C
+vagrant@centralServer:~$ 
+vagrant@centralServer:~$ ping 192.168.2.130
+PING 192.168.2.130 (192.168.2.130) 56(84) bytes of data.
+64 bytes from 192.168.2.130: icmp_seq=1 ttl=62 time=3.16 ms
+64 bytes from 192.168.2.130: icmp_seq=2 ttl=62 time=2.76 ms
+64 bytes from 192.168.2.130: icmp_seq=3 ttl=62 time=2.83 ms
+^C
+--- 192.168.2.130 ping statistics ---
+4 packets transmitted, 3 received, 25% packet loss, time 3004ms
+rtt min/avg/max/mdev = 2.764/2.917/3.155/0.170 ms
+vagrant@centralServer:~$ 
+vagrant@centralServer:~$ traceroute 192.168.2.130
+traceroute to 192.168.2.130 (192.168.2.130), 30 hops max, 60 byte packets
+ 1  _gateway (192.168.0.1)  0.792 ms  0.836 ms  0.558 ms
+ 2  192.168.255.10 (192.168.255.10)  1.522 ms  1.466 ms  1.348 ms
+ 3  192.168.2.130 (192.168.2.130)  2.320 ms  2.169 ms  1.986 ms
+vagrant@centralServer:~$ 
+vagrant@centralServer:~$ traceroute 192.168.1.2
+traceroute to 192.168.1.2 (192.168.1.2), 30 hops max, 60 byte packets
+ 1  _gateway (192.168.0.1)  0.815 ms  0.713 ms  0.928 ms
+ 2  192.168.255.6 (192.168.255.6)  1.583 ms  1.367 ms  1.305 ms
+ 3  192.168.1.2 (192.168.1.2)  1.994 ms  1.931 ms  1.882 ms
+vagrant@centralServer:~$ 
+
+```
+
+**Вывод:** лабораторная сеть создана, адресация и маршрутизация настроена, функционирование сети проверено. Связность между хостами и доступ в интернет с хостов сети работает.
