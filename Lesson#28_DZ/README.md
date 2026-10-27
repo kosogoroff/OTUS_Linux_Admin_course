@@ -83,7 +83,7 @@ Vagrantfile с начальным построением сети
 
 
 
-Репозиторий со стендом домашнего задания выложен по ссылке [https://github.com/kosogoroff/backups_lab.git](https://github.com/kosogoroff/network_lab.git)
+Репозиторий со стендом домашнего задания выложен по ссылке https://github.com/kosogoroff/network_lab.git
 
 Ниже приведено описание выполнения домашнего задания.
 
