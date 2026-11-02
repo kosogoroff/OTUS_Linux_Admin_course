@@ -1304,5 +1304,9 @@ Nov 02 17:37:59 pxeserver dnsmasq-tftp[4230]: sent /srv/tftp/amd64/initrd to 10.
 
 По окончании установки происходит перезагрузка ВМ, после этого ВМ загружается с жёсткого диска установленная ОС Ubuntu 24.04:
 
+<img width="1285" height="881" alt="изображение" src="https://github.com/user-attachments/assets/e418d5fc-be89-4791-a28e-15d38fe78e26" />
+
+
+Задание выполнено !
 
 
