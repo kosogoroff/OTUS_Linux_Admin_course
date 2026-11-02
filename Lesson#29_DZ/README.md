@@ -684,3 +684,564 @@ root@pxeserver:~#
 Ниже приводится описание автоматического конфигурирования сервера с использованием провизионинга ansible после создания виртуальных машин pxeserver и pxeclient.
 Автоматическое конфигурирование с использованием ansible выполняется точно такое же, как в предыдущем пункте 2.1.
 
+### 2.2.1 Доступ ansible на ВМ с использованием ключей и пользователя, созданного vagrant
+
+При создании ВМ vagrant также создал себе в этих ВМ для доступа пользователя vagrant с необходимыми правами,
+а также:
+
+- настроил доступ по ключам для входа без пароля и для пользователя vagrant,
+- настроил sudoers для выполнения пользователем vagrant всех команд через sudo с правами root без пароля. 
+
+Настройки прав пользователя vagrant внутри ВМ:
+
+```
+admin_insta11@mv334 backups_lab]$ vagrant ssh packup
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Sat Oct 24 06:29:59 2026 from 192.168.56.1
+vagrant@backup:~$ 
+vagrant@backup:~$ sudo -i
+root@backup:~# 
+root@backup:~# cat /etc/passwd | grep vagrant
+vagrant:x:1000:1000:vagrant:/home/vagrant:/bin/bash
+root@backup:~# 
+root@backup:~# cat /etc/group | grep vagrant
+adm:x:4:syslog,vagrant
+cdrom:x:24:vagrant
+sudo:x:27:vagrant
+dip:x:30:vagrant
+plugdev:x:46:vagrant
+lxd:x:110:vagrant
+vagrant:x:1000:
+root@backup:~# 
+root@backup:~# cat /etc/sudoers
+<...>
+
+# User privilege specification
+root	ALL=(ALL:ALL) ALL
+
+# Members of the admin group may gain root privileges
+%admin ALL=(ALL) ALL
+
+# Allow members of group sudo to execute any command
+%sudo	ALL=(ALL:ALL) ALL
+
+# See sudoers(5) for more information on "@include" directives:
+
+@includedir /etc/sudoers.d
+root@backup:~# 
+root@backup:~# ll /etc/sudoers.d
+total 20
+drwxr-xr-x  2 root root 4096 Oct 23  2025 ./
+drwxr-xr-x 97 root root 4096 Oct 24 05:54 ../
+-r--r-----  1 root root   31 Oct 23  2025 99_vagrant
+-r--r-----  1 root root 1096 Aug  3  2022 README
+-rw-r--r--  1 root root   31 Oct 23  2025 vagrant
+root@backup:~# 
+root@backup:~# cat /etc/sudoers.d/vagrant
+vagrant ALL=(ALL) NOPASSWD:ALL
+root@backup:~# cat /etc/sudoers.d/99_vagrant
+vagrant ALL=(ALL) NOPASSWD:ALL
+root@backup:~# 
+```
+
+Настройки доступа vagrant в ВМ (пример) можно получить командой:
+
+```
+[admin_insta11@mv334 backups_lab]$ vagrant ssh-config backup
+Host backup
+  HostName 127.0.0.1
+  User vagrant
+  Port 2222
+  UserKnownHostsFile /dev/null
+  StrictHostKeyChecking no
+  PasswordAuthentication no
+  IdentityFile /home/admin_insta11/backups_lab/.vagrant/machines/backup/virtualbox/private_key
+  IdentitiesOnly yes
+  LogLevel FATAL
+  PubkeyAcceptedKeyTypes +ssh-rsa
+  HostKeyAlgorithms +ssh-rsa
+[admin_insta11@mv334 backups_lab]$
+```
+
+Для удобного формирования файла хостов inventory.ini для ansible используем следующий Shell script, который формирует файл inventory.ini автоматически на основе вывода команды 'vagrant ssh-config' :
+
+```
+[admin_insta11@mv334 network_lab]$ cat generate_inventory.sh 
+#!/usr/bin/env bash
+
+INVENTORY="inventory.ini"
+> "$INVENTORY"
+
+echo "[vagrant_boxes]" > "$INVENTORY"
+echo "" >> "$INVENTORY"
+
+# Объявляем ассоциативные массивы для хранения данных
+declare -A HOSTS_PORT
+declare -A HOSTS_NAME
+declare -A HOSTS_KEY
+
+current_host=""
+
+# Читаем вывод vagrant ssh-config
+while IFS= read -r line; do
+
+    # Если встретили Host, запоминаем имя текущего хоста
+    if [[ "$line" =~ ^Host[[:space:]]+([^[:space:]]+) ]]; then
+        current_host="${BASH_REMATCH[1]}"
+    fi
+
+    # Если есть текущий хост, пытаемся собрать для него данные
+    if [[ -n "$current_host" ]]; then
+        # Собираем Port
+        if [[ "$line" =~ ^[[:space:]]*Port[[:space:]]+([0-9]+) ]]; then
+            HOSTS_PORT["$current_host"]="${BASH_REMATCH[1]}"
+        fi
+
+        # Собираем IdentityFile
+        if [[ "$line" =~ ^[[:space:]]*IdentityFile[[:space:]]+\"?([^\"]+)\"? ]]; then
+            HOSTS_KEY["$current_host"]="${BASH_REMATCH[1]}"
+        fi
+
+	        # Собираем HostName
+        if [[ "$line" =~ ^[[:space:]]*HostName[[:space:]]+\"?([^\"]+)\"? ]]; then
+            HOSTS_NAME["$current_host"]="${BASH_REMATCH[1]}"
+        fi
+    fi
+done < <(vagrant ssh-config)
+
+# ТЕПЕРЬ ВЫВОДИМ ВСЁ СРАЗУ
+# Проходим по всем найденным хостам
+for host in "${!HOSTS_PORT[@]}"; do
+    port="${HOSTS_PORT[$host]}"
+    key="${HOSTS_KEY[$host]}"
+    name="${HOSTS_NAME[$host]}"
+    
+    # Проверка: есть ли и порт, и ключ
+    if [[ -n "$port" && -n "$key" ]]; then
+        clean_key="${key//\"/}"
+        echo "$host ansible_host=$name ansible_port=$port ansible_private_key_file=$clean_key" >> "$INVENTORY"
+        echo ">>> ЗАПИСАНО: $host (port=$port)"
+    else
+        echo "⚠️ Пропущен $host: нет полных данных (port='$port', key='$key', name='$name')"
+    fi
+done
+
+# Добавляем переменные группы
+echo "" >> "$INVENTORY"
+echo "[vagrant_boxes:vars]" >> "$INVENTORY"
+echo "ansible_user=vagrant" >> "$INVENTORY"
+echo "ansible_python_interpreter=/usr/bin/python3" >> "$INVENTORY"
+echo "host_key_checking=False" >> "$INVENTORY"
+
+echo "✅ Готово! Содержимое inventory.ini:"
+cat "$INVENTORY"
+```
+
+После создания ВМ с помощью 'vagrant up' запускаем однократно данный скрипт, который создаёт файл inventory.ini для использования ansible:
+
+```
+[admin_insta11@mv334 pxe_lab]$ ./generate_inventory.sh 
+>>> ЗАПИСАНО: pxeserver (port=2222)
+✅ Готово! Содержимое inventory.ini:
+[vagrant_boxes]
+
+pxeserver ansible_host=127.0.0.1 ansible_port=2222 ansible_private_key_file=/home/admin_insta11/pxe_lab/.vagrant/machines/pxeserver/virtualbox/private_key
+
+[vagrant_boxes:vars]
+ansible_user=vagrant
+ansible_python_interpreter=/usr/bin/python3
+host_key_checking=False
+[admin_insta11@mv334 pxe_lab]$ 
+```
+
+После этого в созданный для inventory.ini список хостов можно добавить дополнительные необходимые секции и параметры:
+
+```
+[admin_insta11@mv334 pxe_lab]$ #  Далее вручную добавляем в inventory.ini секцию со списком маршрутизаторов
+[admin_insta11@mv334 pxe_lab]$ vi inventory.ini
+[admin_insta11@mv334 pxe_lab]$ 
+[admin_insta11@mv334 pxe_lab]$ cat inventory.ini
+[vagrant_boxes]
+
+pxeserver ansible_host=127.0.0.1 ansible_port=2222 ansible_private_key_file=/home/admin_insta11/pxe_lab/.vagrant/machines/pxeserver/virtualbox/private_key
+
+[vagrant_boxes:vars]
+ansible_user=vagrant
+ansible_python_interpreter=/usr/bin/python3
+host_key_checking=False
+[admin_insta11@mv334 network_lab]$
+[admin_insta11@mv334 network_lab]$ cat ansible.cfg
+[defaults]
+inventory = ./inventory.ini
+host_key_checking = False
+
+[admin_insta11@mv334 pxe_lab]$
+[admin_insta11@mv334 pxe_lab]$ mv inventory.ini ansible/hosts
+[admin_insta11@mv334 pxe_lab]$
+```
+
+После создания файла inventory.ini скриптом роверяем доступность созданной ВМ pxeserver для управления с помощью ansible::
+
+```
+[admin_insta11@mv334 pxe_lab]$ ansible all -m ping -i ansible/hosts
+pxeserver | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+[admin_insta11@mv334 pxe_lab]$ 
+```
+
+Таким образом, необходимый доступ для ansible через credentials, созданные vagrant, настроен.
+
+
+### 2.2.2 Провизионинг ВМ backup средствами ansible
+
+Общая структура проекта (vagrant + ansible) приведена ниже:
+
+```
+[admin_insta11@mv334 pxe_lab]$ tree
+.
+[admin_insta11@mv334 pxe_lab]$ tree
+.
+├── ansible
+│   ├── files
+│   │   ├── default
+│   │   ├── ks-server.conf
+│   │   ├── meta-data
+│   │   ├── pxe.conf
+│   │   └── user-data
+│   ├── hosts
+│   └── provision.yml
+├── generate_inventory.sh
+└── Vagrantfile
+
+```
+
+Файл приведён в пункте 1.1, файл hosts с инвентарём приведён выше в пункте 2.1
+
+Остальные файлы имеют следующее содержание:
+
+Файл конфигурации DHCP и TFTP-сервера dnsmasq:
+```
+[admin_insta11@mv334 pxe_lab]$ cat ansible/files/pxe.conf 
+#Указываем интерфейс в на котором будет работать DHCP/TFTP
+interface=eth1
+bind-interfaces
+#Также указаваем интерфейс и range адресов которые будут выдаваться по DHCP
+dhcp-range=eth1,10.0.0.100,10.0.0.120
+dhcp-option=77,01
+#Имя файла, с которого надо начинать загрузку для Legacy boot (этот пример рассматривается в методичке)
+dhcp-boot=pxelinux.0
+#Имена файлов, для UEFI-загрузки (не обязательно добавлять)
+dhcp-match=set:efi-x86_64,option:client-arch,7
+dhcp-boot=tag:efi-x86_64,bootx64.efi
+#Включаем TFTP-сервер
+enable-tftp
+#Указываем каталог для TFTP-сервера
+tftp-root=/srv/tftp/amd64
+[admin_insta11@mv334 pxe_lab]$
+```
+
+- файл конфигурации HTTP-сервера:
+```
+[admin_insta11@mv334 pxe_lab]$ cat ansible/files/ks-server.conf 
+#Указываем IP-адрес хоста и порт на котором будет работать Web-сервер
+<VirtualHost 10.0.0.20:80>
+DocumentRoot /
+# Указываем директорию /srv/images из которой будет загружаться iso-образ
+<Directory /srv/images>
+Options Indexes MultiViews
+AllowOverride All
+Require all granted
+</Directory>
+# Файлы Kickstart для автоматической установки
+<Directory /srv/ks>
+Options Indexes MultiViews
+AllowOverride All
+Require all granted
+</Directory>
+</VirtualHost>
+[admin_insta11@mv334 pxe_lab]$
+```
+
+Файл параметров загрузки ядра:
+```
+[admin_insta11@mv334 pxe_lab]$ cat ansible/files/default 
+DEFAULT install
+LABEL install
+  KERNEL linux
+  INITRD initrd
+  APPEND root=/dev/ram0 ramdisk_size=4500000 ip=dhcp iso-url=http://10.0.0.20/srv/images/noble-live-server-amd64.iso autoinstall ds=nocloud-net;s=http://10.0.0.20/srv/ks/
+[admin_insta11@mv334 pxe_lab]$ 
+```
+
+Файлы для автоматической устнановки Autoinstall subiquity:
+```
+[admin_insta11@mv334 pxe_lab]$ cat ansible/files/user-data 
+#cloud-config
+autoinstall:
+  apt:
+    disable_components: []
+    geoip: true
+    preserve_sources_list: false
+    primary:
+      - arches:
+          - amd64
+          - i386
+        uri: http://us.archive.ubuntu.com/ubuntu
+      - arches:
+          - default
+        uri: http://ports.ubuntu.com/ubuntu-ports
+  drivers:
+    install: false
+  identity:
+    hostname: linux
+    password: $6$sJgo6Hg5zXBwkkI8$btrEoWAb5FxKhajagWR49XM4EAOfO/Dr5bMrLOkGe3KkMYdsh7T3MU5mYwY2TIMJpVKckAwnZFs2ltUJ1abOZ.
+    realname: otus
+    username: otus
+  kernel:
+    package: linux-generic
+  keyboard:
+    layout: us
+    toggle: null
+    variant: ''
+  locale: en_US.UTF-8
+  network:
+    ethernets:
+      enp0s3:
+        dhcp4: true
+      enp0s8:
+        dhcp4: true
+    version: 2
+  ssh:
+    allow-pw: true
+    authorized-keys: []
+  updates: security
+  version: 1
+[admin_insta11@mv334 pxe_lab]$ 
+[admin_insta11@mv334 pxe_lab]$ cat ansible/files/meta-data 
+instance-id: i-pxe-test
+local-hostname: linux
+[admin_insta11@mv334 pxe_lab]$ 
+```
+
+Основной playbook для конфигурирования, выполняющий все задачи, выглядит следующим образом:
+
+```
+[admin_insta11@mv334 pxe_lab]$ cat ansible/provision.yml 
+---
+- name: Configure PXE Server (pxeserver) on Ubuntu 24.04
+  hosts: pxeserver
+  become: true
+  vars:
+    # Параметры сети и путей
+    tftp_root: /srv/tftp
+    tftp_subdir: "{{ tftp_root }}/amd64"
+    images_dir: /srv/images
+    ks_dir: /srv/ks
+    
+    # URL для скачивания
+    netboot_url: "https://cdimage.ubuntu.com/ubuntu-server/noble/daily-live/current/noble-netboot-amd64.tar.gz"
+    iso_url: "https://cdimage.ubuntu.com/ubuntu-server/noble/daily-live/current/noble-live-server-amd64.iso"
+    
+    # IP адрес сервера (должен совпадать с настройками dnsmasq и Apache)
+    server_ip: "10.0.0.20"
+
+  tasks:
+    # 1. Отключить UFW
+    - name: Disable and stop UFW firewall
+      ansible.builtin.ufw:
+        state: disabled
+      ignore_errors: yes
+
+    # 2. Установить пакеты: dnsmasq, apache2, wget, tar
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - dnsmasq
+          - apache2
+          - wget
+          - tar
+        state: present
+        update_cache: yes
+
+    # 3. Создать директорию /srv/tftp
+    - name: Create TFTP root directory
+      ansible.builtin.file:
+        path: "{{ tftp_root }}"
+        state: directory
+        mode: '0755'
+
+    # 4. Скачать и распаковать netboot пакет
+    - name: Download netboot tarball
+      ansible.builtin.get_url:
+        url: "{{ netboot_url }}"
+        dest: "/tmp/noble-netboot-amd64.tar.gz"
+        mode: '0644'
+        timeout: 300
+      register: netboot_download
+      changed_when: netboot_download.changed
+
+    - name: Extract netboot files to TFTP root
+      ansible.builtin.unarchive:
+        src: "/tmp/noble-netboot-amd64.tar.gz"
+        dest: "{{ tftp_root }}"
+        remote_src: yes
+        creates: "{{ tftp_subdir }}/pxelinux.0"
+
+    # 5. Скопировать конфиг для загрузки ядра
+    - name: Copy PXE boot configuration file
+      ansible.builtin.copy:
+        src: files/default
+        dest: "{{ tftp_subdir }}/pxelinux.cfg/default"
+        mode: '0644'
+
+    # 6. Скопировать конфиг dnsmasq
+    - name: Copy dnsmasq configuration file
+      ansible.builtin.copy:
+        src: files/pxe.conf
+        dest: /etc/dnsmasq.d/pxe.conf
+        mode: '0644'
+      notify: Restart dnsmasq
+
+    # 7. Создать директорию /srv/images и скачать ISO
+    - name: Create images directory
+      ansible.builtin.file:
+        path: "{{ images_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Download Ubuntu ISO image
+      ansible.builtin.get_url:
+        url: "{{ iso_url }}"
+        dest: "{{ images_dir }}/noble-live-server-amd64.iso"
+        mode: '0644'
+        timeout: 600
+      register: iso_download
+      changed_when: iso_download.changed
+
+    # 8. Установить конфиг Apache и включить сайт
+    - name: Copy Apache VirtualHost configuration
+      ansible.builtin.copy:
+        src: files/ks-server.conf
+        dest: /etc/apache2/sites-available/ks-server.conf
+        mode: '0644'
+      notify: Reload apache2
+
+    - name: Enable Apache site and disable default
+      ansible.builtin.command: a2ensite ks-server.conf
+      args:
+        creates: /etc/apache2/sites-enabled/ks-server.conf
+      notify: Reload apache2
+
+    - name: Disable default Apache site
+      ansible.builtin.command: a2dissite 000-default.conf
+      args:
+        removes: /etc/apache2/sites-enabled/000-default.conf
+      notify: Reload apache2
+      ignore_errors: yes
+
+    # 9. Создать директорию /srv/ks и файлы для автоустановки
+    - name: Create Kickstart/Autoinstall directory
+      ansible.builtin.file:
+        path: "{{ ks_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy user-data (cloud-config)
+      ansible.builtin.copy:
+        src: files/user-data
+        dest: "{{ ks_dir }}/user-data"
+        mode: '0644'
+
+    - name: Copy meta-data
+      ansible.builtin.copy:
+        src: files/meta-data
+        dest: "{{ ks_dir }}/meta-data"
+        mode: '0644'
+
+    # 10. Перезапуск сервисов (через handlers)
+    # dnsmasq и apache2 будут перезапущены только если их конфиги изменились
+
+  handlers:
+    - name: Restart dnsmasq
+      ansible.builtin.systemd:
+        name: dnsmasq
+        state: restarted
+
+    - name: Reload apache2
+      ansible.builtin.systemd:
+        name: apache2
+        state: reloaded
+[admin_insta11@mv334 pxe_lab]$ 
+```
+
+При запуске плейбука просиходит конфигурирование ВМ pxeserver:
+
+```
+[admin_insta11@mv334 ansible]$ ansible-playbook -i hosts provision.yml
+
+PLAY [Configure PXE Server (pxeserver) on Ubuntu 24.04] **************************************************************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************************************************************
+ok: [pxeserver]
+
+TASK [Disable and stop UFW firewall] *********************************************************************************************************************************************************
+ok: [pxeserver]
+
+TASK [Install required packages] *************************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Create TFTP root directory] ************************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Download netboot tarball] **************************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Extract netboot files to TFTP root] ****************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Copy PXE boot configuration file] ******************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Copy dnsmasq configuration file] *******************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Create images directory] ***************************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Download Ubuntu ISO image] *************************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Copy Apache VirtualHost configuration] *************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Enable Apache site and disable default] ************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Disable default Apache site] ***********************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Create Kickstart/Autoinstall directory] ************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Copy user-data (cloud-config)] *********************************************************************************************************************************************************
+changed: [pxeserver]
+
+TASK [Copy meta-data] ************************************************************************************************************************************************************************
+changed: [pxeserver]
+
+RUNNING HANDLER [Restart dnsmasq] ************************************************************************************************************************************************************
+changed: [pxeserver]
+
+RUNNING HANDLER [Reload apache2] *************************************************************************************************************************************************************
+changed: [pxeserver]
+
+PLAY RECAP ***********************************************************************************************************************************************************************************
+pxeserver                  : ok=17   changed=16   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[admin_insta11@mv334 ansible]$ 
+```
+
