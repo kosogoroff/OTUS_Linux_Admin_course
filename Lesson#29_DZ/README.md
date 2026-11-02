@@ -233,7 +233,7 @@ VM, run `vagrant status NAME`.
 Файлы начальной загрузки будут для клиента загрузки клиента с использованием PXE будут находиться преимущественно на сервере TFTP.
 Файл установочного имиджа ОС Linux будет находиться на HTTP-сервере.
 
-#### 1.2.1 Отключаем ufw фаервол
+#### 2.1.1 Отключаем ufw фаервол
 
 ```
 [admin_insta11@mv334 pxe_lab]$ vagrant ssh pxeserver
@@ -278,9 +278,9 @@ root@pxeserver:~#
 
 
 
-#### 1.2.2 Установка и конфигурирование DHCP и TFTP-сервера dnsmasq и файлов для загрузки PXE
+#### 2.1.2 Установка и конфигурирование DHCP и TFTP-сервера dnsmasq и файлов для загрузки PXE
 
-##### 1.2.2.1 Устанавливаем и конфигурируем DHCP и TFTP сервер на основе dnsmasq:
+##### 2.1.2.1 Устанавливаем и конфигурируем DHCP и TFTP сервер на основе dnsmasq:
 
 ```
 root@pxeserver:~# apt update
@@ -351,7 +351,7 @@ No VM guests are running outdated hypervisor (qemu) binaries on this host.
 root@pxeserver:~# 
 ```
 
-##### 1.2.2.2 Конфигурируем DHCP и TFTP сервер dnsmasq, скачиваем, создаём и размещаем на TFTP-сервере необходимые файлы:
+##### 2.1.2.2 Конфигурируем DHCP и TFTP сервер dnsmasq, скачиваем, создаём и размещаем на TFTP-сервере необходимые файлы:
 
 Создаём файл конфигурации:
 
@@ -473,8 +473,7 @@ root@pxeserver:~#
 ```
 
 
-##### 1.2.2.3 Устанавливаем и конфигурируем HTTP сервер apache, скачиваем и размещаем на HTTP-сервере файл загрузочного имиджа:
-
+##### 2.1.2.3 Устанавливаем и конфигурируем HTTP сервер apache, скачиваем и размещаем на HTTP-сервере файл загрузочного имиджа:
 
 
 ```
@@ -1181,7 +1180,7 @@ local-hostname: linux
 При запуске плейбука просиходит конфигурирование ВМ pxeserver:
 
 ```
-[admin_insta11@mv334 ansible]$ ansible-playbook -i hosts provision.yml
+[admin_insta11@mv334 pxe_lab]$ ansible-playbook -i ansible/hosts ansible/provision.yml
 
 PLAY [Configure PXE Server (pxeserver) on Ubuntu 24.04] **************************************************************************************************************************************
 
@@ -1244,4 +1243,66 @@ pxeserver                  : ok=17   changed=16   unreachable=0    failed=0    s
 
 [admin_insta11@mv334 ansible]$ 
 ```
+
+### 3. Проверка загрузки клиенской ВМ pxeclient и автоматической установки ОС и использованием сконфигурированного pxeserver
+
+Для проверки загрузки и автоматической установки ОС необходимо:
+
+Сначала в параметрах ВМ pxeclient установить правильный порядок загрузки: 
+
+- 1-е устройство - жёсткий диск ВМ;
+- 2-е устройство - сеть:
+
+<img width="1011" height="603" alt="изображение" src="https://github.com/user-attachments/assets/1143af82-236e-4e28-afd6-b4c57b1153cf" />
+
+Такой порядок загрузки нужен для того, чтобы после окончания автоматической установки ОС и перезагрузки ВМ по умолчанию начала загружаться с жёсткого диска.
+
+
+2.1 Запустить ВМ pxeclient. На этапе начальной загрузки нажать F12 для перехода в меню загрузки:
+
+<img width="649" height="561" alt="изображение" src="https://github.com/user-attachments/assets/f9bd7ee8-8768-43e9-a00f-1ce48b7281ae" />
+
+Далее в меню загрузки нажать 'l' для загрузки по сети:
+
+<img width="729" height="480" alt="изображение" src="https://github.com/user-attachments/assets/9d50eb8b-70a9-41c3-ae86-ce748e418eb6" />
+
+Далее происходит загрузка ВМ по сети:
+
+Сначала с TFTP-сервера загружается файлы загрузчика pxelinux.0 и ldlinux.32, затем загружается файл конфигурации загрузки ядра default,
+после которого загружаются файлы linux и initrd:
+
+<img width="725" height="478" alt="изображение" src="https://github.com/user-attachments/assets/b6d35468-88da-4e76-8c9c-9828c4db61ce" />
+
+
+Лог tftp-сервера на ВМ pxeserver:
+
+```
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: sent /srv/tftp/amd64/pxelinux.0 to 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: sent /srv/tftp/amd64/ldlinux.c32 to 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/3e7c25c0-29ce-44dd-a222-7eb08abe5e7e not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/01-08-00-27-16-dd-ef not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/0A000075 not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/0A00007 not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/0A0000 not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/0A000 not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/0A00 not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/0A0 not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/0A not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: file /srv/tftp/amd64/pxelinux.cfg/0 not found for 10.0.0.117
+Nov 02 17:37:40 pxeserver dnsmasq-tftp[4230]: sent /srv/tftp/amd64/pxelinux.cfg/default to 10.0.0.117
+Nov 02 17:37:44 pxeserver dnsmasq-tftp[4230]: sent /srv/tftp/amd64/linux to 10.0.0.117
+Nov 02 17:37:59 pxeserver dnsmasq-tftp[4230]: sent /srv/tftp/amd64/initrd to 10.0.0.117
+```
+
+После загрузки первоначального ядра и rootfs происодит повторный запрос и выделение IP-адресов интерфейсов по DHCP, скачивание основного установочного образа ISO Ubuntu Linux :
+
+<img width="726" height="479" alt="изображение" src="https://github.com/user-attachments/assets/fd46b789-ffb6-4add-9592-08bcfc9ffd6d" />
+
+Далее происходит скачивание с HTTP-сервера файлов Autoinstall user-data и meta-data и автоматическая установка и конфигурирование ОС в соответствии с заданными в файле user-data параметрами:
+
+<img width="1287" height="875" alt="изображение" src="https://github.com/user-attachments/assets/feb6bc29-f1c6-491f-922a-e5928c9e7de6" />
+
+По окончании установки происходит перезагрузка ВМ, после этого ВМ загружается с жёсткого диска установленная ОС Ubuntu 24.04:
+
+
 
