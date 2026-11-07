@@ -25,6 +25,17 @@
 
 # Решение
 
+## 1. Создание сети ВМ
+
+За основу лабораторной сети взята лабораторная сеть из занятия "28. Архитектура сетей", из которой для облегчения удалены ненужные хосты office1Router, office1Server, office2Router и office2Server. А также добавлени дополнительный маршрутизатор inetRouter2:
+
+<img width="382" height="373" alt="изображение" src="https://github.com/user-attachments/assets/074258fc-3b49-445c-8a07-3a048d228a6c" />
+
+Таблица IP-адресации интерфейсов хостов:
+
+
+
+
 
 Схема создаваемой лабораторной сети из методички:
 
@@ -36,6 +47,8 @@
 Устанавливаем, запускаем и проверяем сервер nginx на centralServer:
 
 ```
+[admin_insta11@mv334 iptables_lab]$ vagrant ssh centralServer
+vagrant@centralServer:~$
 vagrant@centralServer:~$ sudo apt-get update
 Hit:1 http://us.archive.ubuntu.com/ubuntu jammy InRelease
 Get:2 http://security.ubuntu.com/ubuntu jammy-security InRelease [129 kB]
@@ -127,6 +140,43 @@ vagrant@centralServer:~$
 Сервер nginx на centralServer работает на стандартном порту 80. Задача состоит в том, чтобы пробросить 80й порт centralServer на порт 8080 на inetRouter2.
 
 Для этого на inetRouter2 делаем следующую конфигурацию iptables:
+
+```
+vagrant@inetRouter2:~$ sudo iptables -L -n -v
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo iptables -t nat -A PREROUTING -p tcp --dport 8080 -j DNAT --to-destination 192.168.0.2:80
+vagrant@inetRouter2:~$
+vagrant@inetRouter2:~$ sudo iptables -t nat -A POSTROUTING -o eth1 -p tcp -d 192.168.0.2 --dport 80 -j MASQUERADE
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo iptables -t nat -L -n -v
+Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    7   308 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:8080 to:192.168.0.2:80
+
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    1    44 MASQUERADE  tcp  --  *      eth1    0.0.0.0/0            192.168.0.2          tcp dpt:80
+vagrant@inetRouter2:~$
+```
+
+Доступ к серверу nginx на centralServer проверяем с хоста. Для этой цели:
+
+1. В Vagrantfile при создании ВМ сконфигурирован проброс порта localhost 8082 на порт inetRouter2 8080 :
 
 ```
 
