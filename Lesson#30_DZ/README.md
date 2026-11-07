@@ -37,10 +37,19 @@
 
 <img width="382" height="373" alt="изображение" src="https://github.com/user-attachments/assets/074258fc-3b49-445c-8a07-3a048d228a6c" />
 
-Таблица IP-адресации интерфейсов хостов:
+Таблица IP-адресации интерфейсов хостов (не подключенные и несущественные для лабораторной работы интерфейсы не указаны):
 
 
-
+| Server      | IP and netmask      | Interface       | Default route on the host    |
+|:---------------------------------------|:---------------|:-------------------------|:------------------------|
+| inetRouter     | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
+|                | 192.168.255.1/30                       | eth1         |           |        
+| inetRouter2    | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
+|                | 192.168.255.21/30                      | eth1        |           |
+| centralRouter  | 192.168.255.2/30                       | eth1        | To 192.168.255.1 via eth1        |
+|                | 192.168.255.22/30                      | eth2        |           |
+|                | 192.168.0.1/28                      | eth3        |           |
+| centralServer  | 192.168.0.2/28                      | eth1        | To 192.168.0.1 via eth1          |
 
 
 Схема создаваемой лабораторной сети из методички:
@@ -1260,6 +1269,95 @@ vagrant@centralServer:~$
 
 ```
 
+## 1. Реализовать knocking port. centralRouter может попасть на ssh inetrRouter через knock скрипт.
+
+В задании для демонстрации указано сделать доступ через knocking port с centralRouter (в правила добавлен параметр -s 192.168.255.22 , то есть они действуют только для входящего трафика с хоста centralRouter) - с остальных хостов доступ оставлен без изменений, ограничений нет.
+
+Для реализации Knocking port на inetRouter2 делаем следующие конфигурации правил iptables:
+
+```
+vagrant@inetRouter2:~$ sudo iptables -L -n -v
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo iptables -A INPUT -i lo -j ACCEPT
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo iptables -A INPUT -s 192.168.255.22 -p tcp --dport 7000 -m recent --name KNOCK --set -j DROP
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo iptables -A INPUT -s 192.168.255.22 -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --name KNOCK --rcheck --seconds 10 -j ACCEPT
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo iptables -A INPUT -s 192.168.255.22 -p tcp --dport 22 -j DROP
+vagrant@inetRouter2:~$
+vagrant@inetRouter2:~$ sudo iptables -L -n -v --line-numbers
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination         
+1     3575  243K ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            ctstate RELATED,ESTABLISHED
+2        3   269 ACCEPT     all  --  lo     *       0.0.0.0/0            0.0.0.0/0           
+3        1    60 DROP       tcp  --  *      *       192.168.255.22       0.0.0.0/0            tcp dpt:7000 recent: SET name: KNOCK side: source mask: 255.255.255.255
+4        1    60 ACCEPT     tcp  --  *      *       192.168.255.22       0.0.0.0/0            tcp dpt:22 ctstate NEW recent: CHECK seconds: 10 name: KNOCK side: source mask: 255.255.255.255
+5        7   420 DROP       tcp  --  *      *       192.168.255.22       0.0.0.0/0            tcp dpt:22
+
+Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination         
+vagrant@inetRouter2:~$ 
+```
+
+После этого при заходе с centralRouter по SSH работает nocking port - зайти на порт SSH без предварительного стука на порт 7000 невозможно.
+После стука на порт 7000 в течение 10 секунд зайти на порт SSH можно, если прервать соединение SSH, то для повторного вхда опять требуется стук
+на порт 7000:
+
+```
+vagrant@centralRouter:~$ ssh vagrant@192.168.255.21
+^C
+vagrant@centralRouter:~$ nc -z -w1 192.168.255.21 7000
+vagrant@centralRouter:~$ ssh vagrant@192.168.255.21
+vagrant@192.168.255.21's password: 
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Sat Nov  7 06:47:54 PM UTC 2026
+
+  System load:           0.01
+  Usage of /:            15.7% of 30.34GB
+  Memory usage:          31%
+  Swap usage:            0%
+  Processes:             135
+  Users logged in:       1
+  IPv4 address for eth0: 10.0.2.15
+  IPv6 address for eth0: fd17:625c:f037:2:a00:27ff:fe16:ddef
+
+
+This system is built by the Bento project by Chef Software
+More information can be found at https://github.com/chef/bento
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Sat Nov  7 18:00:46 2026 from 192.168.255.22
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ exit
+logout
+Connection to 192.168.255.21 closed.
+vagrant@centralRouter:~$ ssh vagrant@192.168.255.21
+^C
+vagrant@centralRouter:~$ 
+
+```
+
+Вывод: Knocking port работает.
+
 
 ## 2. запустить nginx на centralServer. Пробросить 80й порт на inetRouter2 8080. Дефолт в инет оставить через inetRouter.
 
@@ -1596,10 +1694,18 @@ tcpdump: listening on eth1, link-type EN10MB (Ethernet), snapshot length 262144 
 
 ```
 
+Проброс порта для доступа к порту 80 nginx работает. С учётом доступа с хоста проброс порта получился двойным:
+
+- сначала проброс порта localhost:8082 на порт 8080 ВМ inetRouter2 - средствами встроенного маршрутизатора virtualbox;
+  
+- затем проброс порта 8080 c inetRouter2 на порт 80 ВМ centralServer - конфигурацией iptables на inetRouter2.
+
+
+
 # КОНЕЦ
 
 
-# Примечания и дополнительная информация
+# Примечания и дополнительная информация/заметки:
 
 ## Q1: 
 
@@ -1818,8 +1924,6 @@ sudo ip route add 192.168.255.16/30 via 192.168.50.20   # линк inetRouter2�
 
 Проверка с хоста:
 
-bash
-
 ping -c 2 192.168.255.21        # свой линк inetRouter2
 ping -c 2 192.168.255.22        # линк к centralRouter (если тот отвечает и путь настроен)
 
@@ -1862,3 +1966,45 @@ ssh -p 2202 vagrant@127.0.0.1     # попадёте на inetRouter2
 - Vagrant по умолчанию и так пробрасывает SSH (порт 2222 и далее по номерам), но делает это «вслепую» — при большом числе машин легко запутаться, какой порт к какой ВМ. Явные порты дают предсказуемость.
 
 - auto_correct: true подстрахует, если 2201/2202 на хосте кем-то заняты — Vagrant возьмёт следующий свободный и напишет об этом.
+
+
+## Q4: 
+
+Как создавать схемы с последовательным стуком на несколько портов ?
+
+
+## A4: 
+
+
+Классическая схема port knocking с recent
+
+Обычно выглядит так — три «стука» на закрытые порты, затем открытие SSH:
+
+```
+# 1. Создаём цепочки (обязательно до правил, которые на них ссылаются)
+iptables -N KNOCKING
+iptables -N KNOCK2
+iptables -N KNOCK3
+
+# 2. Логика стука
+iptables -A KNOCKING -p tcp --dport 10001 -m recent --name KNOCK1 --set -j DROP
+iptables -A KNOCKING -p tcp --dport 10002 -m recent --name KNOCK1 --rcheck --seconds 10 -j KNOCK2
+iptables -A KNOCKING -p tcp --dport 10003 -m recent --name KNOCK2 --rcheck --seconds 10 -j KNOCK3
+iptables -A KNOCKING -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --name KNOCK3 --rcheck --seconds 10 -j ACCEPT
+
+# 3. Фиксация второго и третьего стука
+iptables -A KNOCK2 -m recent --name KNOCK2 --set -j DROP
+iptables -A KNOCK3 -m recent --name KNOCK3 --set -j DROP
+
+# 4. INPUT
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -j KNOCKING
+iptables -A INPUT -p tcp --dport 22 -j DROP
+```
+
+Два практических замечания
+
+    Повторный запуск. -N на уже существующую цепочку выдаст File exists. Если гоняешь скрипт многократно, начни с очистки: iptables -X KNOCKING KNOCK2 KNOCK3 сработает только на пустые, так что сначала -F каждой, либо просто выполняй блок один раз в рамках лабы.
+	
+    Проверка. Постучись последовательно: nc -z <сервер> 10001, 10002, 10003 в течение 10 секунд между стуками, потом сразу ssh. Списки можно смотреть так: ls /proc/net/xt_recent/ — там должны появиться KNOCK1, KNOCK2, KNOCK3 по мере прохождения последовательности.
