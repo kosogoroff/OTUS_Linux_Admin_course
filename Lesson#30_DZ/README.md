@@ -29,6 +29,110 @@
 Схема создаваемой лабораторной сети из методички:
 
 
+## 2. запустить nginx на centralServer. Пробросить 80й порт на inetRouter2 8080. Дефолт в инет оставить через inetRouter.
+
+#### 2.1 Запуск и проверка nginx на centralServer
+
+Устанавливаем, запускаем и проверяем сервер nginx на centralServer:
+
+```
+vagrant@centralServer:~$ sudo apt-get update
+Hit:1 http://us.archive.ubuntu.com/ubuntu jammy InRelease
+Get:2 http://security.ubuntu.com/ubuntu jammy-security InRelease [129 kB]
+Get:3 http://us.archive.ubuntu.com/ubuntu jammy-updates InRelease [128 kB]
+<...>
+Fetched 28.3 MB in 13s (2,188 kB/s)                                                                                         
+Reading package lists... Done
+vagrant@centralServer:~$ 
+vagrant@centralServer:~$ sudo apt install nginx
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  fontconfig-config fonts-dejavu-core libdeflate0 libfontconfig1 libgd3 libjbig0 libjpeg-turbo8 libjpeg8
+  libnginx-mod-http-geoip2 libnginx-mod-http-image-filter libnginx-mod-http-xslt-filter libnginx-mod-mail
+  libnginx-mod-stream libnginx-mod-stream-geoip2 libtiff5 libwebp7 libx11-6 libx11-data libxau6 libxcb1 libxdmcp6 libxpm4
+  nginx-common nginx-core
+Suggested packages:
+  libgd-tools fcgiwrap nginx-doc ssl-cert
+The following NEW packages will be installed:
+  fontconfig-config fonts-dejavu-core libdeflate0 libfontconfig1 libgd3 libjbig0 libjpeg-turbo8 libjpeg8
+  libnginx-mod-http-geoip2 libnginx-mod-http-image-filter libnginx-mod-http-xslt-filter libnginx-mod-mail
+  libnginx-mod-stream libnginx-mod-stream-geoip2 libtiff5 libwebp7 libx11-6 libx11-data libxau6 libxcb1 libxdmcp6 libxpm4
+  nginx nginx-common nginx-core
+0 upgraded, 25 newly installed, 0 to remove and 199 not upgraded.
+Need to get 1,710 kB/3,552 kB of archives.
+After this operation, 11.5 MB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+Get:1 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 libx11-data all 2:1.7.5-1ubuntu0.4 [120 kB]
+Get:2 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 libx11-6 amd64 2:1.7.5-1ubuntu0.4 [668 kB]
+<...>
+vagrant@centralServer:~$ 
+vagrant@centralServer:~$ sudo systemctl status nginx
+● nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; vendor preset: enabled)
+     Active: active (running) since Sat 2026-11-07 13:18:27 UTC; 33s ago
+       Docs: man:nginx(8)
+    Process: 2157 ExecStartPre=/usr/sbin/nginx -t -q -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+    Process: 2158 ExecStart=/usr/sbin/nginx -g daemon on; master_process on; (code=exited, status=0/SUCCESS)
+   Main PID: 2258 (nginx)
+      Tasks: 2 (limit: 709)
+     Memory: 4.0M
+        CPU: 45ms
+     CGroup: /system.slice/nginx.service
+             ├─2258 "nginx: master process /usr/sbin/nginx -g daemon on; master_process on;"
+             └─2262 "nginx: worker process" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" ""
+
+Nov 07 13:18:27 centralServer systemd[1]: Starting A high performance web server and a reverse proxy server...
+Nov 07 13:18:27 centralServer systemd[1]: Started A high performance web server and a reverse proxy server.
+vagrant@centralServer:~$ 
+vagrant@centralServer:~$ sudo vi /var/www/html/index.nginx-debian.html 
+vagrant@centralServer:~$ 
+vagrant@centralServer:~$ curl http://localhost/
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx - it's running on centralServer !</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+vagrant@centralServer:~$ 
+```
+
+Также проверяем доступ к странице nginx на centralServer с хоста через адрес 192.168.50.12 прямого доступа к centralServer:
+
+<img width="787" height="587" alt="изображение" src="https://github.com/user-attachments/assets/eef00db8-5f95-4831-a3f4-5c5782fd2e85" />
+
+
+#### 2.1 Проброс порта сервера nginx на порт 8080 на inetRouter2
+
+Сервер nginx на centralServer работает на стандартном порту 80. Задача состоит в том, чтобы пробросить 80й порт centralServer на порт 8080 на inetRouter2.
+
+Для этого на inetRouter2 делаем следующую конфигурацию iptables:
+
+```
+
+```
+
+
 # КОНЕЦ
 
 
