@@ -1353,7 +1353,36 @@ Connection to 192.168.255.21 closed.
 vagrant@centralRouter:~$ ssh vagrant@192.168.255.21
 ^C
 vagrant@centralRouter:~$ 
+```
 
+При этом видно срабатывание правил в iptables - увеличение счётчиков соответствующих правил:
+
+```
+vagrant@inetRouter2:~$ sudo iptables -L -n -v
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+ 2887  203K ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            ctstate RELATED,ESTABLISHED
+    3   269 ACCEPT     all  --  lo     *       0.0.0.0/0            0.0.0.0/0           
+    2   120 DROP       tcp  --  *      *       192.168.255.22       0.0.0.0/0            tcp dpt:7000 recent: SET name: KNOCK side: source mask: 255.255.255.255
+    1    60 ACCEPT     tcp  --  *      *       192.168.255.22       0.0.0.0/0            tcp dpt:22 ctstate NEW recent: CHECK seconds: 10 name: KNOCK side: source mask: 255.255.255.255
+    4   240 DROP       tcp  --  *      *       192.168.255.22       0.0.0.0/0            tcp dpt:22
+    0     0 ACCEPT     tcp  --  *      *       192.168.255.22       0.0.0.0/0            tcp dpt:22 ctstate NEW recent: CHECK seconds: 10 name: KNOCK side: source mask: 255.255.255.255
+
+Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+vagrant@inetRouter2:~$ sudo iptables -D INPUT -s 192.168.255.22 -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --name KNOCK --rcheck --seconds 10 -j ACCEPT
+vagrant@inetRouter2:~$ 
+```
+
+Также после срабатывания правил видны пришёдшие пакеты в цепочке /proc/net/xt_recent/KNOCK :
+
+```
+vagrant@inetRouter2:~$ cat /proc/net/xt_recent/KNOCK
+src=192.168.255.22 ttl: 64 last_seen: 4300320728 oldest_pkt: 2 4300179072, 4300320728
+vagrant@inetRouter2:~$ 
 ```
 
 Вывод: Knocking port работает.
@@ -1454,7 +1483,7 @@ vagrant@centralServer:~$
 <img width="787" height="587" alt="изображение" src="https://github.com/user-attachments/assets/eef00db8-5f95-4831-a3f4-5c5782fd2e85" />
 
 
-#### 2.1 Проброс порта сервера nginx на порт 8080 на inetRouter2
+#### 2.2 Проброс порта сервера nginx на порт 8080 на inetRouter2
 
 Сервер nginx на centralServer работает на стандартном порту 80. Задача состоит в том, чтобы пробросить 80й порт centralServer на порт 8080 на inetRouter2.
 
@@ -1701,7 +1730,7 @@ tcpdump: listening on eth1, link-type EN10MB (Ethernet), snapshot length 262144 
 - затем проброс порта 8080 c inetRouter2 на порт 80 ВМ centralServer - конфигурацией iptables на inetRouter2.
 
 
-## Общая конфигурация iptables по двух заданиям 
+## 3. Общая конфигурация iptables по двух заданиям 
 
 Общая конфигурация iptables по двух заданиям на inetRouter2 представлена ниже:
 
@@ -1732,6 +1761,136 @@ COMMIT
 vagrant@inetRouter2:~$ 
 ```
 
+Для загрузки правил при заждой загрузке ВМ устанавливаем пакет iptables-persistent и сохраняем правила в него :
+
+```
+vagrant@inetRouter2:~$ sudo apt update
+Get:1 http://security.ubuntu.com/ubuntu jammy-security InRelease [129 kB]
+Hit:2 http://us.archive.ubuntu.com/ubuntu jammy InRelease
+Get:3 http://us.archive.ubuntu.com/ubuntu jammy-updates InRelease [128 kB]
+Get:4 http://us.archive.ubuntu.com/ubuntu jammy-backports InRelease [127 kB]
+Get:5 http://security.ubuntu.com/ubuntu jammy-security/main amd64 Packages [3,675 kB]
+Get:6 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 Packages [3,963 kB]
+Get:7 http://security.ubuntu.com/ubuntu jammy-security/main Translation-en [513 kB]
+Get:8 http://security.ubuntu.com/ubuntu jammy-security/restricted amd64 Packages [6,545 kB]   
+Get:9 http://us.archive.ubuntu.com/ubuntu jammy-updates/main Translation-en [582 kB]            
+Get:10 http://us.archive.ubuntu.com/ubuntu jammy-updates/restricted amd64 Packages [6,815 kB]     
+Get:11 http://security.ubuntu.com/ubuntu jammy-security/restricted Translation-en [1,257 kB]      
+Get:12 http://security.ubuntu.com/ubuntu jammy-security/universe amd64 Packages [1,057 kB]        
+Get:13 http://security.ubuntu.com/ubuntu jammy-security/universe Translation-en [238 kB]                 
+Get:14 http://security.ubuntu.com/ubuntu jammy-security/multiverse amd64 Packages [79.6 kB]           
+Get:15 http://security.ubuntu.com/ubuntu jammy-security/multiverse Translation-en [13.6 kB]      
+Get:16 http://us.archive.ubuntu.com/ubuntu jammy-updates/restricted Translation-en [1,310 kB]                               
+Get:17 http://us.archive.ubuntu.com/ubuntu jammy-updates/universe amd64 Packages [1,291 kB]                                 
+Get:18 http://us.archive.ubuntu.com/ubuntu jammy-updates/universe Translation-en [327 kB]                                   
+Get:19 http://us.archive.ubuntu.com/ubuntu jammy-updates/multiverse amd64 Packages [86.1 kB]                                
+Get:20 http://us.archive.ubuntu.com/ubuntu jammy-updates/multiverse Translation-en [16.5 kB]                                
+Get:21 http://us.archive.ubuntu.com/ubuntu jammy-backports/main amd64 Packages [70.2 kB]                                    
+Get:22 http://us.archive.ubuntu.com/ubuntu jammy-backports/main Translation-en [11.4 kB]                                    
+Get:23 http://us.archive.ubuntu.com/ubuntu jammy-backports/universe amd64 Packages [30.8 kB]                                
+Get:24 http://us.archive.ubuntu.com/ubuntu jammy-backports/universe Translation-en [16.9 kB]                                
+Fetched 28.3 MB in 13s (2,126 kB/s)                                                                                         
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+199 packages can be upgraded. Run 'apt list --upgradable' to see them.
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo apt install iptables-persistent
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  netfilter-persistent
+The following NEW packages will be installed:
+  iptables-persistent netfilter-persistent
+0 upgraded, 2 newly installed, 0 to remove and 199 not upgraded.
+Need to get 13.9 kB of archives.
+After this operation, 93.2 kB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+Get:1 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 netfilter-persistent all 1.0.16 [7,440 B]
+Get:2 http://us.archive.ubuntu.com/ubuntu jammy/universe amd64 iptables-persistent all 1.0.16 [6,488 B]
+Fetched 13.9 kB in 1s (17.0 kB/s)         
+Preconfiguring packages ...
+Selecting previously unselected package netfilter-persistent.
+(Reading database ... 45848 files and directories currently installed.)
+Preparing to unpack .../netfilter-persistent_1.0.16_all.deb ...
+Unpacking netfilter-persistent (1.0.16) ...
+Selecting previously unselected package iptables-persistent.
+Preparing to unpack .../iptables-persistent_1.0.16_all.deb ...
+Unpacking iptables-persistent (1.0.16) ...
+Setting up netfilter-persistent (1.0.16) ...
+Created symlink /etc/systemd/system/multi-user.target.wants/netfilter-persistent.service → /lib/systemd/system/netfilter-pers
+istent.service.
+Setting up iptables-persistent (1.0.16) ...
+update-alternatives: using /lib/systemd/system/netfilter-persistent.service to provide /lib/systemd/system/iptables.service (
+iptables.service) in auto mode
+Processing triggers for man-db (2.10.2-1) ...
+Scanning processes...                                                                                                        
+Scanning linux images...                                                                                                     
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo netfilter-persistent save
+run-parts: executing /usr/share/netfilter-persistent/plugins.d/15-ip4tables save
+run-parts: executing /usr/share/netfilter-persistent/plugins.d/25-ip6tables save
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ cat /etc/iptables/rules.v4
+cat: /etc/iptables/rules.v4: Permission denied
+vagrant@inetRouter2:~$ sudo cat /etc/iptables/rules.v4
+# Generated by iptables-save v1.8.7 on Sun Nov  8 05:25:51 2026
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -s 192.168.255.22/32 -p tcp -m tcp --dport 7000 -m recent --set --name KNOCK --mask 255.255.255.255 --rsource -j DROP
+-A INPUT -s 192.168.255.22/32 -p tcp -m tcp --dport 22 -m conntrack --ctstate NEW -m recent --rcheck --seconds 10 --name KNOCK --mask 255.255.255.255 --rsource -j ACCEPT
+-A INPUT -s 192.168.255.22/32 -p tcp -m tcp --dport 22 -j DROP
+COMMIT
+# Completed on Sun Nov  8 05:25:51 2026
+# Generated by iptables-save v1.8.7 on Sun Nov  8 05:25:51 2026
+*nat
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+-A PREROUTING -p tcp -m tcp --dport 8080 -j DNAT --to-destination 192.168.0.2:80
+-A POSTROUTING -d 192.168.0.2/32 -o eth1 -p tcp -m tcp --dport 80 -j MASQUERADE
+COMMIT
+# Completed on Sun Nov  8 05:25:51 2026
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo systemctl status netfilter-persistent
+● netfilter-persistent.service - netfilter persistent configuration
+     Loaded: loaded (/lib/systemd/system/netfilter-persistent.service; enabled; vendor preset: enabled)
+    Drop-In: /etc/systemd/system/netfilter-persistent.service.d
+             └─iptables.conf
+     Active: active (exited) since Sun 2026-11-08 05:25:29 UTC; 1min 18s ago
+       Docs: man:netfilter-persistent(8)
+   Main PID: 3067 (code=exited, status=0/SUCCESS)
+        CPU: 6ms
+
+Nov 08 05:25:29 inetRouter2 systemd[1]: Starting netfilter persistent configuration...
+Nov 08 05:25:29 inetRouter2 netfilter-persistent[3069]: run-parts: executing /usr/share/netfilter-persistent/plugins.d/15-ip>
+Nov 08 05:25:29 inetRouter2 netfilter-persistent[3070]: Warning: skipping IPv4 (no rules to load)
+Nov 08 05:25:29 inetRouter2 systemd[1]: Finished netfilter persistent configuration.
+Nov 08 05:25:29 inetRouter2 netfilter-persistent[3069]: run-parts: executing /usr/share/netfilter-persistent/plugins.d/25-ip>
+Nov 08 05:25:29 inetRouter2 netfilter-persistent[3071]: Warning: skipping IPv6 (no rules to load)
+vagrant@inetRouter2:~$ 
+vagrant@inetRouter2:~$ sudo netfilter-persistent start
+run-parts: executing /usr/share/netfilter-persistent/plugins.d/15-ip4tables start
+run-parts: executing /usr/share/netfilter-persistent/plugins.d/25-ip6tables start
+vagrant@inetRouter2:~$ 
+```
 
 
 # КОНЕЦ
