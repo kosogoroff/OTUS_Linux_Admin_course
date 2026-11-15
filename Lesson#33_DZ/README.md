@@ -41,11 +41,11 @@ OSPF
 |                | 10.0.10.1/30                          | eth1         |           |        
 |                | 10.0.12.1/30                          | eth2         |           |        
 |                | 192.168.10.1/24                       | eth3         |           |        
-| router2       | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
+| router2       | Default NAT address DHCP virtualbox    | eth0      | Default route via OSPF |
 |                | 10.0.10.2/30                          | eth1         |           |        
 |                | 10.0.11.2/30                          | eth2         |           |        
 |                | 192.168.20.1/24                       | eth3         |           |
-| router3       | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
+| router3       | Default NAT address DHCP virtualbox    | eth0      | Default route via OSPF |
 |                | 10.0.11.1/30                          | eth1         |           |        
 |                | 10.0.12.2/30                          | eth2         |           |        
 |                | 192.168.30.1/24                       | eth3         |           |
@@ -103,7 +103,7 @@ Vagrant.configure("2") do |config|
 
       if boxconfig[:vm_name] == "router3"
        box.vm.provision "ansible" do |ansible|
-        ansible.playbook = "ansible/provision.yml"
+        ansible.playbook = "ansible/playbook.yml"
         ansible.inventory_path = "ansible/hosts"
         ansible.host_key_checking = "false"
         ansible.limit = "all"
@@ -1931,3 +1931,802 @@ traceroute to 8.8.8.8 (8.8.8.8), 30 hops max, 60 byte packets
 14  172.253.72.123 (172.253.72.123)  98.045 ms 142.251.48.43 (142.251.48.43)  92.747 ms 142.251.48.39 (142.251.48.39)  93.300 ms
 15  dns.google (8.8.8.8)  92.012 ms  93.778 ms  94.918 ms
 root@router2:~# 
+```
+
+Меняем cost прямого канала между маршрутизаторами router2 и router3:
+
+```
+outer2# traceroute 192.168.30.1
+traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
+ 1  192.168.30.1 (192.168.30.1)  0.845 ms  0.804 ms  0.728 ms
+router2# 
+router2# conf t
+router2(config)# int eth2
+% Configuration applied with notes:
+No changes found to be committed!
+router2(config-if)# int eth2
+% Configuration applied with notes:
+No changes found to be committed!
+router2(config-if)# ip ospf cost 1000
+router2(config-if)# exit
+router2(config)# 
+router2(config)# exit
+router2# 
+router2# traceroute 192.168.30.1
+traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
+ 1  _gateway (10.0.10.1)  0.899 ms  0.807 ms  0.750 ms
+ 2  192.168.30.1 (192.168.30.1)  1.967 ms  1.905 ms  1.844 ms
+router2# 
+router2# show ip route ospf
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O>* 0.0.0.0/0 [110/1] via 10.0.10.1, eth1, weight 1, 00:13:56
+O>* 10.0.12.0/30 [110/200] via 10.0.10.1, eth1, weight 1, 00:01:38
+O>* 192.168.10.0/24 [110/200] via 10.0.10.1, eth1, weight 1, 00:13:57
+O>* 192.168.30.0/24 [110/300] via 10.0.10.1, eth1, weight 1, 00:01:38
+router2# 
+
+
+router3# traceroute 192.168.20.1
+traceroute to 192.168.20.1 (192.168.20.1), 30 hops max, 60 byte packets
+ 1  192.168.20.1 (192.168.20.1)  1.070 ms  0.955 ms  1.135 ms
+router3#
+router3# show ip route ospf
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O>* 0.0.0.0/0 [110/1] via 10.0.12.1, eth2, weight 1, 01:26:40
+O>* 10.0.10.0/30 [110/200] via 10.0.11.2, eth1, weight 1, 00:00:13
+  *                        via 10.0.12.1, eth2, weight 1, 00:00:13
+O>* 192.168.10.0/24 [110/200] via 10.0.12.1, eth2, weight 1, 01:26:41
+O>* 192.168.20.0/24 [110/200] via 10.0.11.2, eth1, weight 1, 00:00:13
+router3# 
+router3# conf t
+router3(config)# int eth1
+% Configuration applied with notes:
+No changes found to be committed!
+router3(config-if)# ip ospf cost 1000
+router3(config-if)# exit
+router3(config)# traceroute 192.168.20.1
+% Unknown command: traceroute 192.168.20.1
+router3(config)# exit
+router3# traceroute 192.168.20.1
+traceroute to 192.168.20.1 (192.168.20.1), 30 hops max, 60 byte packets
+ 1  _gateway (10.0.12.1)  1.038 ms  0.927 ms  0.861 ms
+ 2  192.168.20.1 (192.168.20.1)  1.817 ms  1.815 ms  1.764 ms
+router3#
+router3# show ip route ospf
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O>* 0.0.0.0/0 [110/1] via 10.0.12.1, eth2, weight 1, 01:25:14
+O>* 10.0.10.0/30 [110/200] via 10.0.12.1, eth2, weight 1, 00:01:17
+O>* 192.168.10.0/24 [110/200] via 10.0.12.1, eth2, weight 1, 01:25:15
+O>* 192.168.20.0/24 [110/300] via 10.0.12.1, eth2, weight 1, 00:01:17
+router3# 
+```
+
+Все выполненные вручную задачи сведены в ansible playbook, выполняющий полностью автоматическое конфигурирование:
+
+```
+[admin_insta11@mv334 ospf_lab]$ cat ansible/playbook.yml 
+---
+- name: Task 1 - Disable Cloud-init on all routers
+  hosts: all
+  become: true
+  tasks:
+
+    # ------------------------------------------------------------------
+    # ЭТАП 1: Отключаем cloud-init, чтобы он не затирал наши конфиги
+    # ВСТАВЛЯТЬ СТРОГО В САМОЕ НАЧАЛО
+    # ------------------------------------------------------------------
+    
+    - name: Disable cloud-init network configuration
+      copy:
+        dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+        content: |
+          network: {config: disabled}
+        owner: root
+        group: root
+        mode: '0644'
+      tags:
+        - cloud-init-disable
+      register: ci_disable_result
+
+    - name: Clean cloud-init network cache (автоматически убирает/очищает 50-cloud-init.yaml)
+      command: cloud-init clean -c network
+      changed_when: false
+      tags:
+        - cloud-init-disable
+      when: ci_disable_result.changed or ci_disable_result is succeeded
+
+    # ------------------------------------------------------------------
+
+- name: Play 2 - Set up NAT on router1
+  hosts: all
+  become: true
+  tasks:
+    - name: Set up NAT on router1
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - src: "iptables_rules.ipv4"
+          dest: "/etc/iptables_rules.ipv4"
+          mode: "0644"
+      when: inventory_hostname == "router1"
+
+    - name: Create systemd unit for applying NAT rules
+      copy:
+        content: |
+          [Unit]
+          Description=Apply iptables NAT rules
+          After=network.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/sh -c "/sbin/iptables-restore < /etc/iptables_rules.ipv4"
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/iptables-nat.service
+        owner: root
+        group: root
+        mode: "0644"
+      when: inventory_hostname == "router1"
+
+    - name: Enable and start iptables-nat service
+      systemd:
+        name: iptables-nat
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: inventory_hostname == "router1"
+
+
+- name: Play 3 - Disable ufw firewall and Enable packets forwarding
+  hosts: all
+  become: true
+  tasks:
+  #Отключаем UFW и удаляем его из автозагрузки
+  - name: disable ufw service
+    service:
+      name: ufw
+      state: stopped
+      enabled: false
+
+  # Включаем маршрутизацию транзитных пакетов
+  - name: set up forward packages across routers
+    sysctl:
+      name: net.ipv4.conf.all.forwarding
+      value: '1'
+      state: present
+
+
+- name: Play 4 - Install and configure FRR
+  hosts: all
+  become: true
+  tasks:
+  # Каталог /etc/apt/keyrings создаём, если его нет
+  - name: ensure keyrings dir exists
+    ansible.builtin.file:
+      path: "/etc/apt/keyrings"
+      state: directory
+      mode: "0755"
+
+  # Скачиваем ключ репозитория FRR
+  - name: download frr gpg key
+    ansible.builtin.get_url:
+      url: "https://deb.frrouting.org/frr/keys.asc"
+      dest: "/etc/apt/keyrings/frr-ascii.asc"
+      mode: "0644"
+
+  # Разармориваем ключ в бинарный keyring
+  - name: dearmor frr gpg key
+    ansible.builtin.command:
+      cmd: "gpg --dearmor -o /etc/apt/keyrings/frr.gpg /etc/apt/keyrings/frr-ascii.asc"
+      creates: "/etc/apt/keyrings/frr.gpg"
+
+  - name: add frr repo
+    ansible.builtin.apt_repository:
+      repo: "deb [signed-by=/etc/apt/keyrings/frr.gpg] https://deb.frrouting.org/frr {{ ansible_distribution_release }} frr-stable"
+      state: present
+
+  
+  # Обновляем пакеты и устанавливаем FRR
+  - name: install FRR packages
+    apt:
+      name: 
+        - frr
+        - frr-pythontools
+      state: present
+      update_cache: true
+
+  # Включаем маршрутизацию транзитных пакетов
+  - name: set up forward packages across routers
+    sysctl:
+      name: net.ipv4.conf.all.forwarding
+      value: '1'
+      state: present
+  
+  # Копируем файл daemons на хосты, указываем владельца и права
+  - name: base set up OSPF 
+    template:
+      src: daemons
+      dest: /etc/frr/daemons
+      owner: frr
+      group: frr
+      mode: 0640
+
+  # Копируем файлы frr.conf на хосты, указываем владельца и права
+  - name: add frr configurations to each host
+    template:
+      src: "frr-{{ inventory_hostname }}.conf"
+      dest: "/etc/frr/frr.conf"
+      owner: frr
+      group: frr
+      mode: "0640"
+
+  # Перезапускам FRR и добавляем в автозагрузку
+  - name: restart FRR
+    service:
+      name: frr
+      state: restarted
+      enabled: true
+
+
+- name: Play 5 - Disable default route (except router1)
+  hosts: all
+  become: true
+  tasks:
+    - name: disable default route
+      template:
+        src: "01-netcfg.yaml"
+        dest: "/etc/netplan/01-netcfg.yaml"
+        owner: root
+        group: root
+        mode: "0644"
+      when: inventory_hostname != "router1"
+    #  when: inventory_hostname not in ["inetRouter", "inetRouter2"]
+
+    # netplan try интерактивен и будет висеть. Для автоматизации используем apply.
+    # С try плейбук не пройдёт без ручного подтверждения.
+    - name: apply netplan config
+      command: netplan apply
+      when: inventory_hostname != "router1"
+
+
+- name: Play 6 - Reboot hosts
+  hosts: all
+  become: true
+  tasks:
+
+    - name: restart all hosts
+      reboot:
+        reboot_timeout: 600
+
+
+- name: Play 7 - Install traceroute
+  hosts: all
+  become: true
+  tasks:
+    - name: wait for OSPF default route
+      command: ip route show default
+      register: rt
+      until: "rt.stdout | length > 0"
+      retries: 12
+      delay: 10
+      when: inventory_hostname != "router1"
+
+    - name: Install traceroute
+      apt:
+        name: traceroute
+        state: present
+        update_cache: true
+
+```
+
+
+Общая структура проекта и остальные файлы приведены ниже:
+
+```
+[admin_insta11@mv334 ospf_lab]$ tree
+.
+├── ansible
+│   ├── ansible.cfg
+│   ├── hosts
+│   ├── playbook.yml
+│   └── templates
+│       ├── 01-netcfg.yaml
+│       ├── daemons
+│       ├── frr-router1.conf
+│       ├── frr-router2.conf
+│       ├── frr-router3.conf
+│       └── iptables_rules.ipv4
+└── Vagrantfile
+
+2 directories, 10 files
+[admin_insta11@mv334 ospf_lab]$ 
+[admin_insta11@mv334 ospf_lab]$ 
+[admin_insta11@mv334 ospf_lab]$ cat ansible/templates/01-netcfg.yaml 
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+          use-routes: false
+      dhcp6: false
+[admin_insta11@mv334 ospf_lab]$ 
+[admin_insta11@mv334 ospf_lab]$ 
+[admin_insta11@mv334 ospf_lab]$ cat ansible/templates/daemons 
+# This file tells the frr package which daemons to start.
+#
+# Sample configurations for these daemons can be found in
+# /usr/share/doc/frr/examples/.
+#
+# ATTENTION:
+#
+# When activating a daemon for the first time, a config file, even if it is
+# empty, has to be present *and* be owned by the user and group "frr", else
+# the daemon will not be started by /etc/init.d/frr. The permissions should
+# be u=rw,g=r,o=.
+# When using "vtysh" such a config file is also needed. It should be owned by
+# group "frrvty" and set to ug=rw,o= though. Check /etc/pam.d/frr, too.
+#
+# The watchfrr, zebra and staticd daemons are always started.
+#
+bgpd=yes
+ospfd=yes
+ospf6d=no
+ripd=no
+ripngd=no
+isisd=no
+pimd=no
+pim6d=no
+ldpd=no
+nhrpd=no
+eigrpd=no
+babeld=no
+sharpd=no
+pbrd=no
+bfdd=no
+fabricd=no
+vrrpd=no
+pathd=no
+
+#
+# If this option is set the /etc/init.d/frr script automatically loads
+# the config via "vtysh -b" when the servers are started.
+# Check /etc/pam.d/frr if you intend to use "vtysh"!
+#
+vtysh_enable=yes
+zebra_options="  -A 127.0.0.1 -s 90000000"
+mgmtd_options="  -A 127.0.0.1"
+bgpd_options="   -A 127.0.0.1"
+ospfd_options="  -A 127.0.0.1"
+ospf6d_options=" -A ::1"
+ripd_options="   -A 127.0.0.1"
+ripngd_options=" -A ::1"
+isisd_options="  -A 127.0.0.1"
+pimd_options="   -A 127.0.0.1"
+pim6d_options="  -A ::1"
+ldpd_options="   -A 127.0.0.1"
+nhrpd_options="  -A 127.0.0.1"
+eigrpd_options=" -A 127.0.0.1"
+babeld_options=" -A 127.0.0.1"
+sharpd_options=" -A 127.0.0.1"
+pbrd_options="   -A 127.0.0.1"
+staticd_options="-A 127.0.0.1"
+bfdd_options="   -A 127.0.0.1"
+fabricd_options="-A 127.0.0.1"
+vrrpd_options="  -A 127.0.0.1"
+pathd_options="  -A 127.0.0.1"
+
+
+# If you want to pass a common option to all daemons, you can use the
+# "frr_global_options" variable.
+#
+#frr_global_options=""
+
+
+# The list of daemons to watch is automatically generated by the init script.
+# This variable can be used to pass options to watchfrr that will be passed
+# prior to the daemon list.
+#
+# To make watchfrr create/join the specified netns, add the the "--netns"
+# option here. It will only have an effect in /etc/frr/<somename>/daemons, and
+# you need to start FRR with "/usr/lib/frr/frrinit.sh start <somename>".
+#
+#watchfrr_options=""
+
+
+# configuration profile
+#
+#frr_profile="traditional"
+#frr_profile="datacenter"
+
+
+# This is the maximum number of FD's that will be available.  Upon startup this
+# is read by the control files and ulimit is called.  Uncomment and use a
+# reasonable value for your setup if you are expecting a large number of peers
+# in say BGP.
+#
+#MAX_FDS=1024
+
+# Uncomment this option if you want to run FRR as a non-root user. Note that
+# you should know what you are doing since most of the daemons need root
+# to work. This could be useful if you want to run FRR in a container
+# for instance.
+# FRR_NO_ROOT="yes"
+
+# For any daemon, you can specify a "wrap" command to start instead of starting
+# the daemon directly. This will simply be prepended to the daemon invocation.
+# These variables have the form daemon_wrap, where 'daemon' is the name of the
+# daemon (the same pattern as the daemon_options variables).
+#
+# Note that when daemons are started, they are told to daemonize with the `-d`
+# option. This has several implications. For one, the init script expects that
+# when it invokes a daemon, the invocation returns immediately. If you add a
+# wrap command here, it must comply with this expectation and daemonize as
+# well, or the init script will never return. Furthermore, because daemons are
+# themselves daemonized with -d, you must ensure that your wrapper command is
+# capable of following child processes after a fork() if you need it to do so.
+#
+# If your desired wrapper does not support daemonization, you can wrap it with
+# a utility program that daemonizes programs, such as 'daemonize'. An example
+# of this might look like:
+#
+# bgpd_wrap="/usr/bin/daemonize /usr/bin/mywrapper"
+#
+# This is particularly useful for programs which record processes but lack
+# daemonization options, such as perf and rr.
+#
+# If you wish to wrap all daemons in the same way, you may set the "all_wrap"
+# variable.
+#
+#all_wrap=""
+[admin_insta11@mv334 ospf_lab]$ cat ansible/templates/frr-router1.conf 
+frr version 10.7.1
+frr defaults traditional
+hostname router1
+log syslog informational
+log file /var/log/frr/frr.log
+service integrated-vtysh-config
+!
+interface eth1
+ description r1-r2
+ ip address 10.0.10.1/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth2
+ description r1-r3
+ ip address 10.0.12.1/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth3
+ description net_router1
+ ip address 192.168.10.1/24
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+router ospf
+ ospf router-id 1.1.1.1
+ network 10.0.10.0/30 area 0
+ network 10.0.12.0/30 area 0
+ network 192.168.10.0/24 area 0
+ neighbor 10.0.10.2
+ neighbor 10.0.12.2
+ default-information originate always
+exit
+!
+[admin_insta11@mv334 ospf_lab]$ 
+[admin_insta11@mv334 ospf_lab]$ cat ansible/templates/frr-router2.conf 
+rr version 10.7.1
+frr defaults traditional
+hostname router2
+log syslog informational
+log file /var/log/frr/frr.log
+service integrated-vtysh-config
+!
+interface eth1
+ description r1-r2
+ ip address 10.0.10.2/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth2
+ description r2-r3
+ ip address 10.0.11.2/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth3
+ description net_router2
+ ip address 192.168.20.1/24
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+router ospf
+ ospf router-id 2.2.2.2
+ network 10.0.10.0/30 area 0
+ network 10.0.11.0/30 area 0
+ network 192.168.20.0/24 area 0
+ neighbor 10.0.10.1
+ neighbor 10.0.11.1
+exit
+!
+[admin_insta11@mv334 ospf_lab]$ cat ansible/templates/frr-router3.conf 
+frr version 10.7.1
+frr defaults traditional
+hostname router3
+log syslog informational
+log file /var/log/frr/frr.log
+service integrated-vtysh-config
+!
+interface eth1
+ description r3-r2
+ ip address 10.0.11.1/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth2
+ description r3-r1
+ ip address 10.0.12.2/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth3
+ description net_router3
+ ip address 192.168.30.1/24
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+router ospf
+ ospf router-id 3.3.3.3
+ network 10.0.11.0/30 area 0
+ network 10.0.12.0/30 area 0
+ network 192.168.30.0/24 area 0
+ neighbor 10.0.11.2
+ neighbor 10.0.12.1
+exit
+!
+[admin_insta11@mv334 ospf_lab]$ cat ansible/templates/iptables_rules.ipv4 
+# Generated by iptables-save v1.8.7 on Sun Nov 15 15:13:49 2026
+*nat
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+-A POSTROUTING -o eth0 -j MASQUERADE
+COMMIT
+# Completed on Sun Nov 15 15:13:49 2026
+[admin_insta11@mv334 ospf_lab]$ 
+[admin_insta11@mv334 ospf_lab]$ cat ansible/hosts 
+[routers]
+router1 ansible_host=192.168.50.10 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/router1/virtualbox/private_key 
+router2 ansible_host=192.168.50.11 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/router2/virtualbox/private_key 
+router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/router3/virtualbox/private_key
+[admin_insta11@mv334 ospf_lab]$ 
+[admin_insta11@mv334 ospf_lab]$ cat ansible/ansible.cfg 
+[defaults]
+#Отключение проверки ключа хоста
+host_key_checking = false
+#Указываем имя файла инвентаризации
+inventory = hosts
+#Отключаем игнорирование предупреждений
+command_warnings= false
+[admin_insta11@mv334 ospf_lab]$ 
+```
+
+После создания ВМ задачи провизионинга выполняются успешно:
+
+```
+[admin_insta11@mv334 ospf_lab]$ VAGRANT_BOX=ubuntu-22.04-virtualbox vagrant up --provision
+Bringing machine 'router1' up with 'virtualbox' provider...
+Bringing machine 'router2' up with 'virtualbox' provider...
+Bringing machine 'router3' up with 'virtualbox' provider...
+<...>
+==> router3: Running provisioner: ansible...
+    router3: Running ansible-playbook...
+
+PLAY [Task 1 - Disable Cloud-init on all routers] ******************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [router2]
+ok: [router3]
+ok: [router1]
+
+TASK [Disable cloud-init network configuration] ********************************
+ok: [router2]
+ok: [router3]
+ok: [router1]
+
+TASK [Clean cloud-init network cache (автоматически убирает/очищает 50-cloud-init.yaml)] ***
+ok: [router1]
+ok: [router3]
+ok: [router2]
+
+PLAY [Play 2 - Set up NAT on router1] ******************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [router3]
+ok: [router1]
+ok: [router2]
+
+TASK [Set up NAT on router1] ***************************************************
+skipping: [router2] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'}) 
+skipping: [router3] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'}) 
+ok: [router1] => (item={'src': 'iptables_rules.ipv4', 'dest': '/etc/iptables_rules.ipv4', 'mode': '0644'})
+
+TASK [Create systemd unit for applying NAT rules] ******************************
+skipping: [router2]
+skipping: [router3]
+ok: [router1]
+
+TASK [Enable and start iptables-nat service] ***********************************
+skipping: [router2]
+skipping: [router3]
+ok: [router1]
+
+PLAY [Play 3 - Disable ufw firewall and Enable packets forwarding] *************
+
+TASK [Gathering Facts] *********************************************************
+ok: [router1]
+ok: [router2]
+ok: [router3]
+
+TASK [disable ufw service] *****************************************************
+ok: [router1]
+ok: [router2]
+ok: [router3]
+
+TASK [set up forward packages across routers] **********************************
+ok: [router1]
+ok: [router3]
+ok: [router2]
+
+PLAY [Play 4 - Install and configure FRR] **************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [router2]
+ok: [router3]
+ok: [router1]
+
+TASK [ensure keyrings dir exists] **********************************************
+ok: [router1]
+ok: [router2]
+ok: [router3]
+
+TASK [download frr gpg key] ****************************************************
+ok: [router2]
+ok: [router3]
+ok: [router1]
+
+TASK [dearmor frr gpg key] *****************************************************
+ok: [router2]
+ok: [router3]
+ok: [router1]
+
+TASK [add frr repo] ************************************************************
+ok: [router1]
+ok: [router3]
+ok: [router2]
+
+TASK [install FRR packages] ****************************************************
+ok: [router1]
+ok: [router2]
+ok: [router3]
+
+TASK [set up forward packages across routers] **********************************
+ok: [router1]
+ok: [router2]
+ok: [router3]
+
+TASK [base set up OSPF] ********************************************************
+ok: [router1]
+ok: [router2]
+ok: [router3]
+
+TASK [add default gateway and static routes for each host] *********************
+ok: [router3]
+ok: [router2]
+ok: [router1]
+
+TASK [restart FRR] *************************************************************
+changed: [router1]
+changed: [router3]
+changed: [router2]
+
+PLAY [Play 5 - Disable default route (except router1)] *************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [router1]
+ok: [router2]
+ok: [router3]
+
+TASK [disable default route] ***************************************************
+skipping: [router1]
+ok: [router2]
+ok: [router3]
+
+TASK [apply netplan config] ****************************************************
+skipping: [router1]
+changed: [router3]
+changed: [router2]
+
+PLAY [Play 6 - Reboot hosts] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [router1]
+ok: [router2]
+ok: [router3]
+
+TASK [restart all hosts] *******************************************************
+changed: [router3]
+changed: [router2]
+changed: [router1]
+
+PLAY [Play 7 - Install traceroute] *********************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [router1]
+ok: [router3]
+ok: [router2]
+
+TASK [wait for OSPF default route] *********************************************
+skipping: [router1]
+FAILED - RETRYING: [router2]: wait for OSPF default route (12 retries left).
+FAILED - RETRYING: [router3]: wait for OSPF default route (12 retries left).
+FAILED - RETRYING: [router3]: wait for OSPF default route (11 retries left).
+FAILED - RETRYING: [router2]: wait for OSPF default route (11 retries left).
+FAILED - RETRYING: [router2]: wait for OSPF default route (10 retries left).
+FAILED - RETRYING: [router3]: wait for OSPF default route (10 retries left).
+changed: [router2]
+changed: [router3]
+
+TASK [Install traceroute] ******************************************************
+ok: [router1]
+changed: [router3]
+changed: [router2]
+
+PLAY RECAP *********************************************************************
+router1                    : ok=25   changed=2    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+router2                    : ok=25   changed=5    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+router3                    : ok=25   changed=5    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+
+[admin_insta11@mv334 ospf_lab]$ 
+```
+
+**ПРИМЕЧАНИЕ:** После перезагрузки хостов требуется некоторое время для обмена маршрутами по OSPF, поэтому пришлось добавить в playbook задачу по ожиданию появления дефолтных маршрутов по OSPF - иначе задача по установке пакета traceroute часто выполнялась с ошибкой на router2 и router3.
