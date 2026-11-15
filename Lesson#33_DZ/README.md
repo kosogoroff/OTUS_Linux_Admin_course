@@ -1104,3 +1104,830 @@ root@router3:~# ll /etc/frr/frr.conf
 root@router3:~# 
 ```
 
+
+После выполненного конфигурирования проверяем наличие маршрутов на маршрутизаторах:
+
+На router1:
+
+```
+root@router1:~# vtysh
+
+Hello, this is FRRouting (version 10.7.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router1# sh ip ro
+ro         route      router-id  
+router1# sh ip route
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+K>* 0.0.0.0/0 [0/100] via 10.0.2.2, eth0, src 10.0.2.15, weight 1, 21:39:04
+C>* 10.0.2.0/24 [0/100] is directly connected, eth0, weight 1, 21:39:04
+K>* 10.0.2.2/32 [0/100] is directly connected, eth0, weight 1, 21:39:04
+K>* 10.0.2.3/32 [0/100] is directly connected, eth0, weight 1, 21:39:04
+L>* 10.0.2.15/32 is directly connected, eth0, weight 1, 21:39:04
+C>* 10.0.10.0/30 is directly connected, eth1, weight 1, 21:39:04
+L>* 10.0.10.1/32 is directly connected, eth1, weight 1, 21:39:04
+O>* 10.0.11.0/30 [110/200] via 10.0.10.2, eth1, weight 1, 02:09:31
+  *                        via 10.0.12.2, eth2, weight 1, 02:09:31
+C>* 10.0.12.0/30 is directly connected, eth2, weight 1, 21:39:04
+L>* 10.0.12.1/32 is directly connected, eth2, weight 1, 21:39:04
+C>* 192.168.10.0/24 is directly connected, eth3, weight 1, 21:39:04
+L>* 192.168.10.1/32 is directly connected, eth3, weight 1, 21:39:04
+O>* 192.168.20.0/24 [110/200] via 10.0.10.2, eth1, weight 1, 02:34:15
+O>* 192.168.30.0/24 [110/200] via 10.0.12.2, eth2, weight 1, 02:09:30
+C>* 192.168.50.0/24 is directly connected, eth4, weight 1, 21:39:04
+L>* 192.168.50.10/32 is directly connected, eth4, weight 1, 21:39:04
+router1# 
+router1# sh ip route ospf
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O>* 10.0.11.0/30 [110/200] via 10.0.10.2, eth1, weight 1, 02:10:52
+  *                        via 10.0.12.2, eth2, weight 1, 02:10:52
+O>* 192.168.20.0/24 [110/200] via 10.0.10.2, eth1, weight 1, 02:35:36
+O>* 192.168.30.0/24 [110/200] via 10.0.12.2, eth2, weight 1, 02:10:51
+router1# exit
+router1#
+root@router1:~# ip r
+default via 10.0.2.2 dev eth0 proto dhcp src 10.0.2.15 metric 100 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.2 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.10.0/30 dev eth1 proto kernel scope link src 10.0.10.1 
+10.0.11.0/30 nhid 31 proto ospf metric 20 
+	nexthop via 10.0.10.2 dev eth1 weight 1 
+	nexthop via 10.0.12.2 dev eth2 weight 1 
+10.0.12.0/30 dev eth2 proto kernel scope link src 10.0.12.1 
+192.168.10.0/24 dev eth3 proto kernel scope link src 192.168.10.1 
+192.168.20.0/24 nhid 26 via 10.0.10.2 dev eth1 proto ospf metric 20 
+192.168.30.0/24 nhid 32 via 10.0.12.2 dev eth2 proto ospf metric 20 
+192.168.50.0/24 dev eth4 proto kernel scope link src 192.168.50.10 
+root@router1:~#
+root@router1:~# ip r | grep ospf
+10.0.11.0/30 nhid 31 proto ospf metric 20 
+192.168.20.0/24 nhid 26 via 10.0.10.2 dev eth1 proto ospf metric 20 
+192.168.30.0/24 nhid 32 via 10.0.12.2 dev eth2 proto ospf metric 20 
+root@router1:~# 
+```
+
+router2:
+
+```
+oot@router2:~# vtysh
+
+Hello, this is FRRouting (version 10.7.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router2# show ip route
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O   0.0.0.0/0 [110/1] via 10.0.10.1, eth1, weight 1, 02:44:25
+K>* 0.0.0.0/0 [0/100] via 10.0.2.2, eth0, src 10.0.2.15, weight 1, 02:56:50
+C>* 10.0.2.0/24 [0/100] is directly connected, eth0, weight 1, 02:56:50
+K>* 10.0.2.2/32 [0/100] is directly connected, eth0, weight 1, 02:56:50
+K>* 10.0.2.3/32 [0/100] is directly connected, eth0, weight 1, 02:56:50
+L>* 10.0.2.15/32 is directly connected, eth0, weight 1, 02:56:50
+C>* 10.0.10.0/30 is directly connected, eth1, weight 1, 02:56:50
+L>* 10.0.10.2/32 is directly connected, eth1, weight 1, 02:56:50
+C>* 10.0.11.0/30 is directly connected, eth2, weight 1, 02:56:50
+L>* 10.0.11.2/32 is directly connected, eth2, weight 1, 02:56:50
+O>* 10.0.12.0/30 [110/200] via 10.0.10.1, eth1, weight 1, 02:18:56
+  *                        via 10.0.11.1, eth2, weight 1, 02:18:56
+O>* 192.168.10.0/24 [110/200] via 10.0.10.1, eth1, weight 1, 02:44:26
+C>* 192.168.20.0/24 is directly connected, eth3, weight 1, 02:56:51
+L>* 192.168.20.1/32 is directly connected, eth3, weight 1, 02:56:51
+O>* 192.168.30.0/24 [110/200] via 10.0.11.1, eth2, weight 1, 02:18:46
+C>* 192.168.50.0/24 is directly connected, eth4, weight 1, 02:56:51
+L>* 192.168.50.11/32 is directly connected, eth4, weight 1, 02:56:51
+router2# 
+router2# show ip route ospf
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O   0.0.0.0/0 [110/1] via 10.0.10.1, eth1, weight 1, 02:44:32
+O>* 10.0.12.0/30 [110/200] via 10.0.10.1, eth1, weight 1, 02:19:03
+  *                        via 10.0.11.1, eth2, weight 1, 02:19:03
+O>* 192.168.10.0/24 [110/200] via 10.0.10.1, eth1, weight 1, 02:44:33
+O>* 192.168.30.0/24 [110/200] via 10.0.11.1, eth2, weight 1, 02:18:52
+router2# exit
+root@router2:~#
+root@router2:~# ip r
+default via 10.0.2.2 dev eth0 proto dhcp src 10.0.2.15 metric 100 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.2 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.10.0/30 dev eth1 proto kernel scope link src 10.0.10.2 
+10.0.11.0/30 dev eth2 proto kernel scope link src 10.0.11.2 
+10.0.12.0/30 nhid 21 proto ospf metric 20 
+	nexthop via 10.0.10.1 dev eth1 weight 1 
+	nexthop via 10.0.11.1 dev eth2 weight 1 
+192.168.10.0/24 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.20.0/24 dev eth3 proto kernel scope link src 192.168.20.1 
+192.168.30.0/24 nhid 22 via 10.0.11.1 dev eth2 proto ospf metric 20 
+192.168.50.0/24 dev eth4 proto kernel scope link src 192.168.50.11 
+root@router2:~# 
+root@router2:~# ip route | grep ospf
+10.0.12.0/30 nhid 21 proto ospf metric 20 
+192.168.10.0/24 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.30.0/24 nhid 22 via 10.0.11.1 dev eth2 proto ospf metric 20 
+root@router2:~#
+```
+
+
+router3:
+
+```
+oot@router3:~# vtysh
+
+Hello, this is FRRouting (version 10.7.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router3# sh ip route
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O   0.0.0.0/0 [110/1] via 10.0.12.1, eth2, weight 1, 02:21:22
+K>* 0.0.0.0/0 [0/100] via 10.0.2.2, eth0, src 10.0.2.15, weight 1, 02:30:55
+C>* 10.0.2.0/24 [0/100] is directly connected, eth0, weight 1, 02:30:55
+K>* 10.0.2.2/32 [0/100] is directly connected, eth0, weight 1, 02:30:55
+K>* 10.0.2.3/32 [0/100] is directly connected, eth0, weight 1, 02:30:55
+L>* 10.0.2.15/32 is directly connected, eth0, weight 1, 02:30:55
+O>* 10.0.10.0/30 [110/200] via 10.0.11.2, eth1, weight 1, 02:21:23
+  *                        via 10.0.12.1, eth2, weight 1, 02:21:23
+C>* 10.0.11.0/30 is directly connected, eth1, weight 1, 02:30:55
+L>* 10.0.11.1/32 is directly connected, eth1, weight 1, 02:30:55
+C>* 10.0.12.0/30 is directly connected, eth2, weight 1, 02:30:55
+L>* 10.0.12.2/32 is directly connected, eth2, weight 1, 02:30:55
+O>* 192.168.10.0/24 [110/200] via 10.0.12.1, eth2, weight 1, 02:21:23
+O>* 192.168.20.0/24 [110/200] via 10.0.11.2, eth1, weight 1, 02:21:33
+C>* 192.168.30.0/24 is directly connected, eth3, weight 1, 02:30:55
+L>* 192.168.30.1/32 is directly connected, eth3, weight 1, 02:30:55
+C>* 192.168.50.0/24 is directly connected, eth4, weight 1, 02:30:55
+L>* 192.168.50.12/32 is directly connected, eth4, weight 1, 02:30:55
+router3# 
+router3# sh ip route ospf
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O   0.0.0.0/0 [110/1] via 10.0.12.1, eth2, weight 1, 02:21:29
+O>* 10.0.10.0/30 [110/200] via 10.0.11.2, eth1, weight 1, 02:21:30
+  *                        via 10.0.12.1, eth2, weight 1, 02:21:30
+O>* 192.168.10.0/24 [110/200] via 10.0.12.1, eth2, weight 1, 02:21:30
+O>* 192.168.20.0/24 [110/200] via 10.0.11.2, eth1, weight 1, 02:21:40
+router3# 
+router3# exit
+root@router3:~# ip r
+default via 10.0.2.2 dev eth0 proto dhcp src 10.0.2.15 metric 100 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.2 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.10.0/30 nhid 22 proto ospf metric 20 
+	nexthop via 10.0.11.2 dev eth1 weight 1 
+	nexthop via 10.0.12.1 dev eth2 weight 1 
+10.0.11.0/30 dev eth1 proto kernel scope link src 10.0.11.1 
+10.0.12.0/30 dev eth2 proto kernel scope link src 10.0.12.2 
+192.168.10.0/24 nhid 23 via 10.0.12.1 dev eth2 proto ospf metric 20 
+192.168.20.0/24 nhid 16 via 10.0.11.2 dev eth1 proto ospf metric 20 
+192.168.30.0/24 dev eth3 proto kernel scope link src 192.168.30.1 
+192.168.50.0/24 dev eth4 proto kernel scope link src 192.168.50.12 
+root@router3:~#
+root@router3:~# ip r | grep ospf
+10.0.10.0/30 nhid 22 proto ospf metric 20 
+192.168.10.0/24 nhid 23 via 10.0.12.1 dev eth2 proto ospf metric 20 
+192.168.20.0/24 nhid 16 via 10.0.11.2 dev eth1 proto ospf metric 20 
+root@router3:~# 
+```
+
+По таблицам маршрутизации выше видно, что:
+
+1. На всех маршрутизаторах:
+   
+1.1 в таблицах маршрутизации всех маршрутизаторов есть маршруты на подсети - либо как непосредственно подключенные/connected/link
+   (если эти сети подключены непосредственно к маршрутизатору),    либо как изученные по OSPF (если данные сети не подключены непосредственно):
+
+```
+192.168.10.0/24
+192.168.20.0/24
+192.168.30.0/24
+10.0.10.0/30 
+10.0.11.0/30
+10.0.13.0/30
+```
+
+1.2 на всех маршрутизаторах есть в таблицах маршрутизации маршрут по умолчанию, направленный в сторону интерфейса eth0 - это маршрут в сторону маршрутизатора virtualbox - это стандартный выход в интернет (далее мы его отключим на router2 и router3, чтобы у всей сети был маршрут по умолчанию через router1).
+
+В таблице маршрутизации frr эти маршруты по умолчанию видны как K (Kernel):
+
+2. на router2 и router3 в таблице маршрутизации frr также есть маршрут по умолчанию, полученный через OSPF - так как на маршрутизаторе router1 включено анонсирование маршрута по умолчанию командой 'default-information originate always'. Но этот маршрут менее приоритетный и поэтому не используется:
+   
+```
+router3# sh ip route
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O   0.0.0.0/0 [110/1] via 10.0.12.1, eth2, weight 1, 02:21:22
+K>* 0.0.0.0/0 [0/100] via 10.0.2.2, eth0, src 10.0.2.15, weight 1, 02:30:55
+<...>
+```
+
+
+Удалим маршруты по умолчанию в сторону интерфейсов eth0/virtualbox на маршрутизаторах router2 и router3:
+
+- отключаем использование маршрутов на интерфейсе eth0 в файле /etc/netplan/01-netcfg.yaml
+
+- отключаем конфигурирование cloud-init и удаляем файл /etc/netplan/50-cloud-init.yaml
+
+- применяем новую конфигурацию netplan
+
+
+После этого в таблице маршрутизации router2 и router3 маршрут в сторону eth0 исчезает, поэтому появляется маршрут по умолчанию в сторону router1, полученный по OSPF:
+
+```
+root@router2:~# 
+root@router2:~# ll /etc/netplan/
+total 20
+drwxr-xr-x  2 root root 4096 Nov 14 13:15 ./
+drwxr-xr-x 98 root root 4096 Nov 15 10:38 ../
+-rw-r--r--  1 root root   63 Oct 23  2025 01-netcfg.yaml
+-rw-------  1 root root  391 Nov 14 13:14 50-cloud-init.yaml
+-rw-r--r--  1 root root  259 Nov 14 13:15 50-vagrant.yaml
+root@router2:~# 
+root@router2:~# cat /etc/netplan/01-netcfg.yaml 
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: true
+root@router2:~# 
+root@router2:~# cat /etc/netplan/50-cloud-init.yaml 
+# This file is generated from information provided by the datasource.  Changes
+# to it will not persist across an instance reboot.  To disable cloud-init's
+# network configuration capabilities, write a file
+# /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg with the following:
+# network: {config: disabled}
+network:
+    ethernets:
+        enp0s3:
+            dhcp4: true
+    version: 2
+root@router2:~# 
+root@router2:~# cat /etc/netplan/50-vagrant.yaml
+---
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+      - 10.0.10.2/30
+    eth2:
+      addresses:
+      - 10.0.11.2/30
+    eth3:
+      addresses:
+      - 192.168.20.1/24
+    eth4:
+      addresses:
+      - 192.168.50.11/24
+root@router2:~# 
+root@router2:~# 
+root@router2:~# vi /etc/netplan/01-netcfg.yaml 
+root@router2:~# 
+root@router2:~# cat /etc/netplan/01-netcfg.yaml
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+          use-routes: false
+      dhcp6: false
+root@router2:~# 
+root@router2:~# cat > /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+network: {config: disabled}
+root@router2:~# 
+root@router2:~# rm /etc/netplan/50-cloud-init.yaml
+root@router2:~# 
+root@router2:~# netplan apply
+root@router2:~# 
+root@router2:~# ip r
+default nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.10.0/30 dev eth1 proto kernel scope link src 10.0.10.2 
+10.0.11.0/30 dev eth2 proto kernel scope link src 10.0.11.2 
+10.0.12.0/30 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.10.0/24 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.20.0/24 dev eth3 proto kernel scope link src 192.168.20.1 
+192.168.30.0/24 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.50.0/24 dev eth4 proto kernel scope link src 192.168.50.11 
+root@router2:~#
+root@router2:~# vtysh
+
+Hello, this is FRRouting (version 10.7.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router2# show ip route
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O>* 0.0.0.0/0 [110/1] via 10.0.10.1, eth1, weight 1, 00:13:21
+C>* 10.0.2.0/24 [0/100] is directly connected, eth0, weight 1, 00:13:25
+K>* 10.0.2.3/32 [0/100] is directly connected, eth0, weight 1, 00:13:25
+L>* 10.0.2.15/32 is directly connected, eth0, weight 1, 00:13:25
+C>* 10.0.10.0/30 is directly connected, eth1, weight 1, 00:13:25
+L>* 10.0.10.2/32 is directly connected, eth1, weight 1, 00:13:25
+C>* 10.0.11.0/30 is directly connected, eth2, weight 1, 00:13:25
+L>* 10.0.11.2/32 is directly connected, eth2, weight 1, 00:13:25
+O>* 10.0.12.0/30 [110/200] via 10.0.10.1, eth1, weight 1, 00:01:01
+  *                        via 10.0.11.1, eth2, weight 1, 00:01:01
+O>* 192.168.10.0/24 [110/200] via 10.0.10.1, eth1, weight 1, 00:13:22
+C>* 192.168.20.0/24 is directly connected, eth3, weight 1, 00:13:25
+L>* 192.168.20.1/32 is directly connected, eth3, weight 1, 00:13:25
+O>* 192.168.30.0/24 [110/200] via 10.0.11.1, eth2, weight 1, 00:01:02
+C>* 192.168.50.0/24 is directly connected, eth4, weight 1, 00:13:25
+L>* 192.168.50.11/32 is directly connected, eth4, weight 1, 00:13:25
+router2# 
+```
+
+На маршрутизаторе router3 делаем полностью аналогично.
+
+```
+root@router3:~# ll /etc/netplan/
+total 20
+drwxr-xr-x  2 root root 4096 Nov 14 13:16 ./
+drwxr-xr-x 98 root root 4096 Nov 15 11:01 ../
+-rw-r--r--  1 root root   63 Oct 23  2025 01-netcfg.yaml
+-rw-------  1 root root  391 Nov 14 13:16 50-cloud-init.yaml
+-rw-r--r--  1 root root  259 Nov 14 13:16 50-vagrant.yaml
+root@router3:~# 
+root@router3:~# cat /etc/netplan/01-netcfg.yaml
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: true
+root@router3:~# 
+root@router3:~# cat /etc/netplan/50-cloud-init.yaml
+# This file is generated from information provided by the datasource.  Changes
+# to it will not persist across an instance reboot.  To disable cloud-init's
+# network configuration capabilities, write a file
+# /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg with the following:
+# network: {config: disabled}
+network:
+    ethernets:
+        enp0s3:
+            dhcp4: true
+    version: 2
+root@router3:~# 
+root@router3:~# cat /etc/netplan/50-vagrant.yaml
+---
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth1:
+      addresses:
+      - 10.0.11.1/30
+    eth2:
+      addresses:
+      - 10.0.12.2/30
+    eth3:
+      addresses:
+      - 192.168.30.1/24
+    eth4:
+      addresses:
+      - 192.168.50.12/24
+root@router3:~# 
+root@router3:~# vi /etc/netplan/01-netcfg.yaml
+root@router3:~# 
+root@router3:~# cat > /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+network: {config: disabled}
+root@router3:~# 
+root@router3:~# rm /etc/netplan/50-cloud-init.yaml
+root@router3:~# 
+root@router3:~# cat /etc/netplan/01-netcfg.yaml
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+          use-routes: false
+      dhcp6: false
+root@router3:~# 
+root@router3:~# netplan apply
+
+root@router3:~# 
+root@router3:~# ip route
+default nhid 23 via 10.0.12.1 dev eth2 proto ospf metric 20 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.10.0/30 nhid 22 proto ospf metric 20 
+	nexthop via 10.0.11.2 dev eth1 weight 1 
+	nexthop via 10.0.12.1 dev eth2 weight 1 
+10.0.11.0/30 dev eth1 proto kernel scope link src 10.0.11.1 
+10.0.12.0/30 dev eth2 proto kernel scope link src 10.0.12.2 
+192.168.10.0/24 nhid 23 via 10.0.12.1 dev eth2 proto ospf metric 20 
+192.168.20.0/24 nhid 16 via 10.0.11.2 dev eth1 proto ospf metric 20 
+192.168.30.0/24 dev eth3 proto kernel scope link src 192.168.30.1 
+192.168.50.0/24 dev eth4 proto kernel scope link src 192.168.50.12 
+root@router3:~# 
+root@router3:~# vtysh
+
+Hello, this is FRRouting (version 10.7.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router3# ip route
+% Unknown command: ip route
+router3# show ip route
+Codes: K - kernel route, C - connected, L - local, S - static,
+       R - RIP, O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric, t - Table-Direct,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+IPv4 unicast VRF default:
+O>* 0.0.0.0/0 [110/1] via 10.0.12.1, eth2, weight 1, 00:00:33
+C>* 10.0.2.0/24 [0/100] is directly connected, eth0, weight 1, 00:00:38
+K>* 10.0.2.3/32 [0/100] is directly connected, eth0, weight 1, 00:00:38
+L>* 10.0.2.15/32 is directly connected, eth0, weight 1, 00:00:38
+O>* 10.0.10.0/30 [110/200] via 10.0.11.2, eth1, weight 1, 00:00:34
+  *                        via 10.0.12.1, eth2, weight 1, 00:00:34
+C>* 10.0.11.0/30 is directly connected, eth1, weight 1, 00:00:39
+L>* 10.0.11.1/32 is directly connected, eth1, weight 1, 00:00:39
+C>* 10.0.12.0/30 is directly connected, eth2, weight 1, 00:00:39
+L>* 10.0.12.2/32 is directly connected, eth2, weight 1, 00:00:39
+O>* 192.168.10.0/24 [110/200] via 10.0.12.1, eth2, weight 1, 00:00:34
+O>* 192.168.20.0/24 [110/200] via 10.0.11.2, eth1, weight 1, 00:00:34
+C>* 192.168.30.0/24 is directly connected, eth3, weight 1, 00:00:39
+L>* 192.168.30.1/32 is directly connected, eth3, weight 1, 00:00:39
+C>* 192.168.50.0/24 is directly connected, eth4, weight 1, 00:00:38
+L>* 192.168.50.12/32 is directly connected, eth4, weight 1, 00:00:38
+router3# 
+```
+
+Для обеспечения доступа в Интернет со всех хостов сети на router1 конфигурируем NAT средствами iptables, устанавливаем пакет iptables-persistent, сохраняем сонфигурацию созданную конфигурацию iptables для последующего автоматического применения при перезагрузках хоста router1:
+
+```
+root@router1:~# iptables -L -n -v
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain FORWARD (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+root@router1:~# 
+root@router1:~# iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+root@router1:~# 
+root@router1:~# iptables -t nat -L -n -v
+Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    2   160 MASQUERADE  all  --  *      eth0    0.0.0.0/0            0.0.0.0/0           
+root@router1:~# 
+root@router1:~# iptables-save
+# Generated by iptables-save v1.8.7 on Sun Nov 15 15:12:27 2026
+*nat
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+-A POSTROUTING -o eth0 -j MASQUERADE
+COMMIT
+# Completed on Sun Nov 15 15:12:27 2026
+root@router1:~# 
+root@router1:~# apt install iptables-persistant
+<...>
+The following additional packages will be installed:
+  netfilter-persistent
+The following NEW packages will be installed:
+  iptables-persistent netfilter-persistent
+<...>
+Do you want to continue? [Y/n] y
+<...>
+root@router1:~# 
+root@router1:~# iptables-save > /etc/iptables/rules.v4
+root@router1:~# 
+```
+
+После сделанных конфигураций проверяем связность между всеми сетями, а также с внешним интернетом через анонсированный по протоколу OSPF с router1 маршрут по умолчанию:
+
+
+1. с router2 проверяем доступность сетей 192.168.10.0/24 и 192.168.30/24, подключенных к маршрутизаторам router1 и router3 соответственно:
+
+```
+root@router2:~# ip r
+default nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.10.0/30 dev eth1 proto kernel scope link src 10.0.10.2 
+10.0.11.0/30 dev eth2 proto kernel scope link src 10.0.11.2 
+10.0.12.0/30 nhid 21 proto ospf metric 20 
+	nexthop via 10.0.10.1 dev eth1 weight 1 
+	nexthop via 10.0.11.1 dev eth2 weight 1 
+192.168.10.0/24 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.20.0/24 dev eth3 proto kernel scope link src 192.168.20.1 
+192.168.30.0/24 nhid 22 via 10.0.11.1 dev eth2 proto ospf metric 20 
+192.168.50.0/24 dev eth4 proto kernel scope link src 192.168.50.11 
+root@router2:~# 
+root@router2:~# ping 192.168.30.1
+PING 192.168.30.1 (192.168.30.1) 56(84) bytes of data.
+64 bytes from 192.168.30.1: icmp_seq=1 ttl=64 time=1.08 ms
+64 bytes from 192.168.30.1: icmp_seq=2 ttl=64 time=1.03 ms
+64 bytes from 192.168.30.1: icmp_seq=3 ttl=64 time=1.01 ms
+64 bytes from 192.168.30.1: icmp_seq=4 ttl=64 time=1.09 ms
+^C
+--- 192.168.30.1 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3009ms
+rtt min/avg/max/mdev = 1.014/1.054/1.092/0.031 ms
+root@router2:~# 
+root@router2:~# traceroute 192.168.30.1
+traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
+ 1  192.168.30.1 (192.168.30.1)  0.822 ms  0.726 ms  0.579 ms
+root@router2:~# 
+```
+
+Выше по трейсу видно, что трафик идёт по прямому линку между router2 и router3.
+
+Отключаем прямой линк eth2 между маршрутизаторами router2 и router3 - при этом изменятся маршрут на сеть 192.168.30.0/24,
+но при этом связность сохраняется, и по трейсу видно, что трафик в сеть 192.168.30.0/24 стал идти через router1 и router3.
+После тестирования восстанавливаем прямой линк eth2 между router2 и router3 - трафик в сеть 192.168.30.0/24 начинает опять идти по прямому линку между router2 и router3.
+
+```
+oot@router2:~# ip link set eth2 down
+root@router2:~#
+root@router2:~# ip route
+default nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.10.0/30 dev eth1 proto kernel scope link src 10.0.10.2 
+10.0.11.0/30 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+10.0.12.0/30 nhid 21 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.10.0/24 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.20.0/24 dev eth3 proto kernel scope link src 192.168.20.1 
+192.168.30.0/24 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.50.0/24 dev eth4 proto kernel scope link src 192.168.50.11 
+root@router2:~# 
+root@router2:~# ping 192.168.30.1
+PING 192.168.30.1 (192.168.30.1) 56(84) bytes of data.
+64 bytes from 192.168.30.1: icmp_seq=1 ttl=63 time=1.78 ms
+64 bytes from 192.168.30.1: icmp_seq=2 ttl=63 time=2.10 ms
+64 bytes from 192.168.30.1: icmp_seq=3 ttl=63 time=1.90 ms
+^C
+--- 192.168.30.1 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2005ms
+rtt min/avg/max/mdev = 1.784/1.929/2.100/0.130 ms
+root@router2:~# traceroute 192.168.30.1
+traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
+ 1  _gateway (10.0.10.1)  0.809 ms  0.752 ms  0.660 ms
+ 2  192.168.30.1 (192.168.30.1)  1.540 ms  1.443 ms  1.335 ms
+root@router2:~# 
+root@router2:~# ip link set eth2 up
+root@router2:~# 
+root@router2:~# ping 192.168.30.1
+PING 192.168.30.1 (192.168.30.1) 56(84) bytes of data.
+64 bytes from 192.168.30.1: icmp_seq=1 ttl=64 time=0.759 ms
+64 bytes from 192.168.30.1: icmp_seq=2 ttl=64 time=0.893 ms
+^C
+--- 192.168.30.1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1020ms
+rtt min/avg/max/mdev = 0.759/0.826/0.893/0.067 ms
+root@router2:~# 
+root@router2:~# traceroute 192.168.30.1
+traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
+ 1  192.168.30.1 (192.168.30.1)  1.082 ms  0.892 ms  0.803 ms
+root@router2:~# 
+```
+
+Аналогичные результаты для маршрутизаторов router1 и router3:
+
+```
+root@router1:~# ping 192.168.20.1
+PING 192.168.20.1 (192.168.20.1) 56(84) bytes of data.
+64 bytes from 192.168.20.1: icmp_seq=1 ttl=64 time=1.13 ms
+64 bytes from 192.168.20.1: icmp_seq=2 ttl=64 time=1.18 ms
+^C
+--- 192.168.20.1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1003ms
+rtt min/avg/max/mdev = 1.129/1.155/1.182/0.026 ms
+root@router1:~# traceroute 192.168.20.1
+traceroute to 192.168.20.1 (192.168.20.1), 30 hops max, 60 byte packets
+ 1  192.168.20.1 (192.168.20.1)  0.908 ms  0.710 ms  0.646 ms
+root@router1:~# 
+root@router1:~# ping 192.168.30.1
+PING 192.168.30.1 (192.168.30.1) 56(84) bytes of data.
+64 bytes from 192.168.30.1: icmp_seq=1 ttl=64 time=1.18 ms
+64 bytes from 192.168.30.1: icmp_seq=2 ttl=64 time=0.900 ms
+64 bytes from 192.168.30.1: icmp_seq=3 ttl=64 time=0.976 ms
+^C
+--- 192.168.30.1 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2005ms
+rtt min/avg/max/mdev = 0.900/1.017/1.176/0.116 ms
+root@router1:~# traceroute 192.168.30.1
+traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
+ 1  192.168.30.1 (192.168.30.1)  1.040 ms  0.916 ms  0.696 ms
+root@router1:~#
+
+
+router3# ping 192.168.10.1
+PING 192.168.10.1 (192.168.10.1) 56(84) bytes of data.
+64 bytes from 192.168.10.1: icmp_seq=1 ttl=64 time=1.00 ms
+64 bytes from 192.168.10.1: icmp_seq=2 ttl=64 time=1.02 ms
+^C
+--- 192.168.10.1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1002ms
+rtt min/avg/max/mdev = 1.000/1.010/1.020/0.010 ms
+router3# traceroute 192.168.10.1
+traceroute to 192.168.10.1 (192.168.10.1), 30 hops max, 60 byte packets
+ 1  192.168.10.1 (192.168.10.1)  0.799 ms  0.738 ms  0.517 ms
+router3# 
+outer3# ping 192.168.20.1
+PING 192.168.20.1 (192.168.20.1) 56(84) bytes of data.
+64 bytes from 192.168.20.1: icmp_seq=1 ttl=63 time=2.18 ms
+64 bytes from 192.168.20.1: icmp_seq=2 ttl=63 time=2.00 ms
+64 bytes from 192.168.20.1: icmp_seq=3 ttl=63 time=2.09 ms
+64 bytes from 192.168.20.1: icmp_seq=4 ttl=63 time=1.82 ms
+64 bytes from 192.168.20.1: icmp_seq=5 ttl=63 time=2.07 ms
+^C
+--- 192.168.20.1 ping statistics ---
+5 packets transmitted, 5 received, 0% packet loss, time 4011ms
+rtt min/avg/max/mdev = 1.816/2.030/2.180/0.121 ms
+router3#
+router3# traceroute 192.168.20.1
+traceroute to 192.168.20.1 (192.168.20.1), 30 hops max, 60 byte packets
+ 1  192.168.20.1 (192.168.20.1)  0.938 ms  0.826 ms  0.955 ms
+router3# 
+```
+
+Проверяем доступ в публичный интернет с маршрутизаторов router2 и router3 через анонсированный с маршрутизатора router1 маршрута по умолчанию:
+
+```
+root@router2:~# ip r
+default nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.10.0/30 dev eth1 proto kernel scope link src 10.0.10.2 
+10.0.11.0/30 dev eth2 proto kernel scope link src 10.0.11.2 
+10.0.12.0/30 nhid 21 proto ospf metric 20 
+	nexthop via 10.0.10.1 dev eth1 weight 1 
+	nexthop via 10.0.11.1 dev eth2 weight 1 
+192.168.10.0/24 nhid 16 via 10.0.10.1 dev eth1 proto ospf metric 20 
+192.168.20.0/24 dev eth3 proto kernel scope link src 192.168.20.1 
+192.168.30.0/24 nhid 22 via 10.0.11.1 dev eth2 proto ospf metric 20 
+192.168.50.0/24 dev eth4 proto kernel scope link src 192.168.50.11 
+root@router2:~# 
+root@router2:~# ping 8.8.8.8
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=254 time=91.4 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=254 time=91.4 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=254 time=91.3 ms
+^C
+--- 8.8.8.8 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2005ms
+rtt min/avg/max/mdev = 91.260/91.326/91.359/0.046 ms
+root@router2:~# 
+root@router2:~# traceroute 8.8.8.8
+traceroute to 8.8.8.8 (8.8.8.8), 30 hops max, 60 byte packets
+ 1  _gateway (10.0.10.1)  1.202 ms  1.064 ms  0.993 ms
+ 2  10.0.2.2 (10.0.2.2)  1.649 ms  1.573 ms  1.509 ms
+ 3  172.17.15.1 (172.17.15.1)  1.781 ms  1.424 ms  1.600 ms
+ 4  192.168.10.14 (192.168.10.14)  1.773 ms  1.711 ms  1.570 ms
+ 5  192.168.200.7 (192.168.200.7)  68.334 ms  68.269 ms  67.889 ms
+ 6  192.168.200.6 (192.168.200.6)  67.674 ms  68.585 ms  68.488 ms
+ 7  192.168.1.3 (192.168.1.3)  70.894 ms  70.516 ms  70.283 ms
+ 8  Moscow-GIN-PE11-ae4-2499.rosprint.net (195.151.21.1)  70.497 ms  70.485 ms  70.363 ms
+ 9  Umbrella-PE01-ae1-0.rosprint.net (195.151.241.162)  73.351 ms  73.051 ms  73.003 ms
+10  Moscow-GIN-IX01-et-2-0-5-0.rosprint.net (195.151.233.53)  71.437 ms  71.392 ms  71.255 ms
+11  * * 178.18.225.111.ix.dataix.eu (178.18.225.111)  118.158 ms
+12  * * *
+13  72.14.237.55 (72.14.237.55)  93.571 ms 216.239.48.77 (216.239.48.77)  96.288 ms 72.14.237.55 (72.14.237.55)  95.711 ms
+14  142.251.65.81 (142.251.65.81)  106.625 ms 142.251.48.39 (142.251.48.39)  95.249 ms 142.251.236.71 (142.251.236.71)  93.234 ms
+15  dns.google (8.8.8.8)  97.235 ms  109.470 ms  92.984 ms
+root@router2:~#
+```
+
+Выше по трейсу видно, что трафик идёт по прямому линку между router2 и router1.
+
+Отключаем прямой линк eth1 между маршрутизаторами router2 и router1 - при этом дефолтынй маршрут,
+но при этом связность сохраняется, и по трейсу видно, что трафик в сеть 8.8.8.8 стал идти через router3 и затем через router1.
+После тестирования восстанавливаем прямой линк eth1 между router1 и router3 - трафик в сеть 8.8.8.8 начинает опять идти по прямому линку между router2 и router1.
+
+```
+root@router2:~# ip r
+default nhid 22 via 10.0.11.1 dev eth2 proto ospf metric 20 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.10.0/30 nhid 22 via 10.0.11.1 dev eth2 proto ospf metric 20 
+10.0.11.0/30 dev eth2 proto kernel scope link src 10.0.11.2 
+10.0.12.0/30 nhid 21 via 10.0.11.1 dev eth2 proto ospf metric 20 
+192.168.10.0/24 nhid 22 via 10.0.11.1 dev eth2 proto ospf metric 20 
+192.168.20.0/24 dev eth3 proto kernel scope link src 192.168.20.1 
+192.168.30.0/24 nhid 22 via 10.0.11.1 dev eth2 proto ospf metric 20 
+192.168.50.0/24 dev eth4 proto kernel scope link src 192.168.50.11 
+root@router2:~#
+root@router2:~# ping 8.8.8.8
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=253 time=92.6 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=253 time=91.9 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=253 time=92.3 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=253 time=92.7 ms
+^C
+--- 8.8.8.8 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 91.897/92.373/92.713/0.325 ms
+root@router2:~#
+root@router2:~# ip link set eth1 down
+root@router2:~# 
+root@router2:~# traceroute 8.8.8.8
+traceroute to 8.8.8.8 (8.8.8.8), 30 hops max, 60 byte packets
+ 1  _gateway (10.0.11.1)  1.190 ms  1.061 ms  0.995 ms
+ 2  10.0.12.1 (10.0.12.1)  1.668 ms  1.592 ms  1.522 ms
+ 3  10.0.2.2 (10.0.2.2)  2.959 ms  2.489 ms  2.408 ms
+ 4  172.17.15.1 (172.17.15.1)  2.270 ms  1.979 ms  2.367 ms
+ 5  192.168.10.14 (192.168.10.14)  3.590 ms  3.460 ms  3.394 ms
+ 6  192.168.200.7 (192.168.200.7)  69.326 ms  69.414 ms  69.337 ms
+ 7  192.168.200.6 (192.168.200.6)  69.302 ms  71.235 ms  71.181 ms
+ 8  192.168.1.3 (192.168.1.3)  74.471 ms  71.379 ms  71.202 ms
+ 9  Moscow-GIN-PE11-ae4-2499.rosprint.net (195.151.21.1)  72.773 ms  71.108 ms  71.273 ms
+10  Umbrella-PE01-ae1-0.rosprint.net (195.151.241.162)  71.600 ms  72.267 ms  71.760 ms
+11  Moscow-GIN-IX01-et-2-0-5-0.rosprint.net (195.151.233.53)  71.294 ms  71.520 ms  72.386 ms
+12  * 178.18.225.111.ix.dataix.eu (178.18.225.111)  108.503 ms *
+13  178.18.235.253 (178.18.235.253)  94.835 ms  96.715 ms  95.040 ms
+14  216.239.48.77 (216.239.48.77)  93.914 ms 192.178.248.215 (192.178.248.215)  94.141 ms 216.239.57.151 (216.239.57.151)  96.668 ms
+15  142.251.48.45 (142.251.48.45)  94.418 ms 142.251.236.73 (142.251.236.73)  93.705 ms 172.253.72.123 (172.253.72.123)  96.120 ms
+16  dns.google (8.8.8.8)  93.605 ms  95.599 ms  97.297 ms
+root@router2:~#
+root@router2:~# ip link set eth1 up
+root@router2:~# 
+root@router2:~# traceroute 8.8.8.8
+traceroute to 8.8.8.8 (8.8.8.8), 30 hops max, 60 byte packets
+ 1  _gateway (10.0.10.1)  0.977 ms  0.865 ms  0.682 ms
+ 2  10.0.2.2 (10.0.2.2)  1.529 ms  1.715 ms  1.637 ms
+ 3  172.17.15.1 (172.17.15.1)  1.489 ms  1.789 ms  1.712 ms
+ 4  192.168.10.14 (192.168.10.14)  1.650 ms  1.999 ms  1.931 ms
+ 5  192.168.200.7 (192.168.200.7)  68.229 ms  68.154 ms  67.971 ms
+ 6  192.168.200.6 (192.168.200.6)  67.902 ms  68.023 ms  67.954 ms
+ 7  192.168.1.3 (192.168.1.3)  70.320 ms  70.238 ms  70.179 ms
+ 8  Moscow-GIN-PE11-ae4-2499.rosprint.net (195.151.21.1)  75.278 ms  71.602 ms  73.290 ms
+ 9  Umbrella-PE01-ae1-0.rosprint.net (195.151.241.162)  72.264 ms  72.198 ms  72.347 ms
+10  Moscow-GIN-IX01-et-2-0-5-0.rosprint.net (195.151.233.53)  72.267 ms  71.893 ms  72.038 ms
+11  * 178.18.225.111.ix.dataix.eu (178.18.225.111)  140.670 ms  96.455 ms
+12  178.18.235.253 (178.18.235.253)  97.638 ms  95.564 ms  95.720 ms
+13  216.239.48.77 (216.239.48.77)  96.066 ms 192.178.248.215 (192.178.248.215)  97.196 ms 72.14.237.55 (72.14.237.55)  93.928 ms
+14  172.253.72.123 (172.253.72.123)  98.045 ms 142.251.48.43 (142.251.48.43)  92.747 ms 142.251.48.39 (142.251.48.39)  93.300 ms
+15  dns.google (8.8.8.8)  92.012 ms  93.778 ms  94.918 ms
+root@router2:~# 
