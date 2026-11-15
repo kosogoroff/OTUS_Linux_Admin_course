@@ -512,8 +512,7 @@ ospf6d=no
 <...>
 root@router1:~# 
 oot@router1:~# systemctl restart frr.service
-root@router1:~# systemctlstatus frr.service
--bash: systemctlstatus: command not found
+root@router1:~# 
 root@router1:~# systemctl status frr.service
 ● frr.service - FRRouting
      Loaded: loaded (/lib/systemd/system/frr.service; enabled; vendor preset: enabled)
