@@ -28,6 +28,7 @@ OSPF
 
 Ниже приведена схема лабораторной сети из методички:
 
+<img width="705" height="565" alt="изображение" src="https://github.com/user-attachments/assets/ee80c10d-a6b5-4b96-8e9a-c772c0e84831" />
 
 
 
