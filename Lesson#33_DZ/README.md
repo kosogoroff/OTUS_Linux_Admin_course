@@ -30,6 +30,22 @@ OSPF
 
 <img width="705" height="565" alt="изображение" src="https://github.com/user-attachments/assets/26f87e15-d6da-485d-a001-c47c636ad12f" />
 
+
+Таблица IP-адресации интерфейсов хостов:
+
+
+| Server      | IP and netmask      | Interface       | Default route on the host    |
+|:---------------------------------------|:---------------|:-------------------------|:------------------------|
+| router1       | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
+|                | 192.168.255.1/30                       | eth1         |           |        
+| inetRouter2    | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
+|                | 192.168.255.21/30                      | eth1        |           |
+| centralRouter  | 192.168.255.2/30                       | eth1        | To 192.168.255.1 via eth1        |
+|                | 192.168.255.22/30                      | eth2        |           |
+|                | 192.168.0.1/28                      | eth3        |           |
+| centralServer  | 192.168.0.2/28                      | eth1        | To 192.168.0.1 via eth1          |
+
+
 Vagrantfile для создания лабораторного стенда приведён ниже:
 
 ```
@@ -91,7 +107,7 @@ Vagrant.configure("2") do |config|
       end
 
       boxconfig[:net].each do |ipconf|
-        box.vm.network "private_network", ipconf
+        box.vm.network "private_network", **ipconf
       end
 
      end
@@ -159,6 +175,20 @@ vm.network "private_network", **opts
 ```
 
 В документации Ruby есть официальный разбор, где расписаны все случаи «что раньше работало, а теперь нет»:  https://www.ruby-lang.org/en/news/2019/12/12/separation-of-positional-and-keyword-arguments-in-ruby-3-0/ 
+
+
+**ПРИМЕЧАНИЕ:**  гипервизор virtualbox по умолчанию разрешает использование только определённого диапазона подсетей для создания внутренних сетей виртаульных машин.
+Так как в задании используются другие IP-адреса, то их необходимо явно разрешить, задав список в файле /etc/vbox/networks.conf , и затем перезагрузить гипервизор:
+
+```
+[admin_insta11@mv334 network_lab]$ cat /etc/vbox/networks.conf
+* 192.168.56.0/21
+* 192.168.0.0/21
+* 192.168.50.0/24
+* 192.168.255.0/24
+[admin_insta11@mv334 network_lab]$ 
+[admin_insta11@mv334 network_lab]$ sudo systemctl restart vboxdrv
+```
 
 При запуске vagrant создаются ВМ:
 
