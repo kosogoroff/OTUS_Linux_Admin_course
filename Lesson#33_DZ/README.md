@@ -28,7 +28,7 @@ OSPF
 
 Ниже приведена схема лабораторной сети из методички:
 
-<img width="705" height="565" alt="изображение" src="https://github.com/user-attachments/assets/26f87e15-d6da-485d-a001-c47c636ad12f" />
+
 
 
 Таблица IP-адресации интерфейсов хостов:
