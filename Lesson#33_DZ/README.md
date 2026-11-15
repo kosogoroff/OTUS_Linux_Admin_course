@@ -553,8 +553,28 @@ oot@router1:~# vtysh
 Hello, this is FRRouting (version 10.7.1).
 Copyright 1996-2005 Kunihiro Ishiguro, et al.
 
-router1# interface eth1
-% Unknown command: interface eth1
+router1# show interface brief
+Interface       Status  VRF             Addresses
+---------       ------  ---             ---------
+eth0            up      default         10.0.2.15/24
+eth1            up      default         10.0.10.1/30
+eth2            up      default         10.0.12.1/30
+eth3            up      default         192.168.10.1/24
+eth4            up      default         192.168.50.10/24
+lo              up      default         
+
+router1# sh run
+Building configuration...
+
+Current configuration:
+!
+frr version 10.7.1
+frr defaults traditional
+hostname router1
+log syslog informational
+service integrated-vtysh-config
+!
+end
 router1# 
 router1# conf t
 router1(config)# interface eth1
@@ -582,7 +602,7 @@ router1(config)#
 router1(config)# router ospf
 router1(config-router)# router-id 1.1.1.1
 router1(config-router)# network 10.0.10.0/30 area 0
-router1(config-router)#  network 10.0.12.0/30 area 0
+router1(config-router)#  
 router1(config-router)#  network 192.168.10.0/24 area 0
 router1(config-router)# 
 router1(config-router)# neighbor 10.0.10.2
@@ -639,5 +659,448 @@ router ospf
  default-information originate always
 exit
 !
+root@router1:~#
+root@router1:~# ll /etc/frr/frr.conf
+-rw-r----- 1 frr frr 706 Nov 14 16:00 /etc/frr/frr.conf
 root@router1:~# 
 ```
+
+Аналогично конфигурируем маршрутизаторы router2 и router3:
+
+```
+[admin_insta11@mv334 ospf_lab]$ vagrant ssh router2
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+Last login: Sat Nov 14 15:24:03 2026 from 10.0.2.2
+vagrant@router2:~$ 
+vagrant@router2:~$ sudo -i
+root@router2:~# 
+root@router2:~# systemctl stop ufw
+root@router2:~# 
+root@router2:~# systemctl disable ufw
+Synchronizing state of ufw.service with SysV service script with /lib/systemd/systemd-sysv-install.
+Executing: /lib/systemd/systemd-sysv-install disable ufw
+Removed /etc/systemd/system/multi-user.target.wants/ufw.service.
+root@router2:~# 
+root@router2:~# mkdir -p /etc/apt/keyrings
+root@router2:~# 
+root@router2:~# curl -fsSL https://deb.frrouting.org/frr/keys.asc | sudo gpg --dearmor -o /etc/apt/keyrings/frr.gpg
+root@router2:~# 
+root@router2:~# echo "deb [signed-by=/etc/apt/keyrings/frr.gpg] https://deb.frrouting.org/frr $(lsb_release -cs) frr-stable" | sudo tee /etc/apt/sources.list.d/frr.list
+deb [signed-by=/etc/apt/keyrings/frr.gpg] https://deb.frrouting.org/frr jammy frr-stable
+root@router2:~# 
+root@router2:~# cat /etc/apt/sources.list.d/frr.list
+deb [signed-by=/etc/apt/keyrings/frr.gpg] https://deb.frrouting.org/frr jammy frr-stable
+root@router2:~# 
+root@router2:~# apt update
+<...>
+200 packages can be upgraded. Run 'apt list --upgradable' to see them.
+root@router2:~# 
+root@router2:~# apt install frr frr-pythontools
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libc-ares2 libpcre2-posix3 libyang3
+Suggested packages:
+  frr-doc
+The following NEW packages will be installed:
+  frr frr-pythontools libc-ares2 libpcre2-posix3 libyang3
+0 upgraded, 5 newly installed, 0 to remove and 200 not upgraded.
+Need to get 7,808 kB of archives.
+After this operation, 43.1 MB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+<...>
+root@router2:~# 
+root@router2:~# apt install traceroute tcpdump net-tools
+<...>
+root@router2:~# 
+root@router2:~# sysctl net.ipv4.conf.all.forwarding=1
+net.ipv4.conf.all.forwarding = 1
+root@router2:~# 
+root@router2:~# sysctl -w net.ipv6.conf.all.disable_ipv6=1
+net.ipv6.conf.all.disable_ipv6 = 1
+root@router2:~# 
+root@router2:~# vi /etc/frr/daemons
+root@router2:~# 
+root@router2:~# cat /etc/frr/daemons | grep "zebra\|ospf"
+# The watchfrr, zebra and staticd daemons are always started.
+ospfd=yes
+ospf6d=no
+zebra_options="  -A 127.0.0.1 -s 90000000"
+bgpd_options="   -A 127.0.0.1"
+ospfd_options="  -A 127.0.0.1"
+ospf6d_options=" -A ::1"
+# bgpd_wrap="/usr/bin/daemonize /usr/bin/mywrapper"
+root@router2:~# 
+root@router2:~# systemctl restart frr.service
+root@router2:~# 
+root@router2:~# systemctl status frr.service
+● frr.service - FRRouting
+     Loaded: loaded (/lib/systemd/system/frr.service; enabled; vendor preset: enabled)
+     Active: active (running) since Sun 2026-11-15 10:40:40 UTC; 21s ago
+       Docs: https://frrouting.readthedocs.io/en/latest/setup.html
+    Process: 3850 ExecStart=/usr/lib/frr/frrinit.sh start (code=exited, status=0/SUCCESS)
+   Main PID: 3861 (watchfrr)
+     Status: "FRR Operational"
+      Tasks: 17 (limit: 3425)
+     Memory: 29.2M
+        CPU: 483ms
+     CGroup: /system.slice/frr.service
+             ├─3861 /usr/lib/frr/watchfrr -d mgmtd zebra bgpd ospfd staticd
+             ├─3873 /usr/lib/frr/mgmtd -d -F traditional -A 127.0.0.1
+             ├─3875 /usr/lib/frr/zebra -d -F traditional -A 127.0.0.1 -s 90000000
+             ├─3880 /usr/lib/frr/bgpd -d -F traditional -A 127.0.0.1
+             ├─3887 /usr/lib/frr/ospfd -d -F traditional -A 127.0.0.1
+             └─3890 /usr/lib/frr/staticd -d -F traditional -A 127.0.0.1
+
+Nov 15 10:40:40 router2 watchfrr[3861]: [QDG3Y-BY5TN] zebra state -> up : connect succeeded
+Nov 15 10:40:40 router2 watchfrr[3861]: [QDG3Y-BY5TN] bgpd state -> up : connect succeeded
+Nov 15 10:40:40 router2 watchfrr[3861]: [QDG3Y-BY5TN] ospfd state -> up : connect succeeded
+Nov 15 10:40:40 router2 watchfrr[3861]: [QDG3Y-BY5TN] staticd state -> up : connect succeeded
+Nov 15 10:40:40 router2 watchfrr[3861]: [KWE5Q-QNGFC] all daemons up, doing startup-complete notify
+Nov 15 10:40:40 router2 frrinit.sh[3850]:  * Started watchfrr
+Nov 15 10:40:40 router2 systemd[1]: Started FRRouting.
+Nov 15 10:40:41 router2 zebra[3875]: [V98V0-MTWPF] client 59 says hello and bids fair to announce only bgp routes vrf=0
+Nov 15 10:40:55 router2 zebra[3875]: [SAPXX-HP5B5][EC 4043309108] Extended Error: failed to retrieve link settings
+Nov 15 10:40:55 router2 zebra[3875]: [WVJCK-PPMGD][EC 4043309093] generic-netlink-cmd (NS 0) error: Operation not supported, type=RTM_DELADDR(21), seq=98, pid=3874
+root@router2:~# 
+root@router2:~# vtysh
+
+Hello, this is FRRouting (version 10.7.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router2# 
+router2# 
+router2# show interface brief 
+Interface       Status  VRF             Addresses
+---------       ------  ---             ---------
+eth0            up      default         10.0.2.15/24
+eth1            up      default         10.0.10.2/30
+eth2            up      default         10.0.11.2/30
+eth3            up      default         192.168.20.1/24
+eth4            up      default         192.168.50.11/24
+lo              up      default         
+
+router2# 
+router2# show running-config 
+Building configuration...
+
+Current configuration:
+!
+frr version 10.7.1
+frr defaults traditional
+hostname router2
+log syslog informational
+service integrated-vtysh-config
+!
+end
+router2# 
+router2# conf t
+router2(config)# int eth1
+router2(config-if)# desc r1-r2
+router2(config-if)# ip address 10.0.10.2/30
+router2(config-if)# ip ospf mtu-ignore
+router2(config-if)# ip ospf hello-interval 10
+router2(config-if)# ip ospf dead-interval 30
+router2(config-if)# interface eth2
+router2(config-if)# desc r2-r3
+router2(config-if)# ip address 10.0.11.2/30
+router2(config-if)# ip ospf mtu-ignore
+router2(config-if)# ip ospf hello-interval 10
+router2(config-if)# ip ospf dead-interval 30
+router2(config-if)# 
+router2(config-if)# interface eth3
+router2(config-if)# desc net_router2
+router2(config-if)# ip address 192.168.20.1/24
+router2(config-if)# ip ospf mtu-ignore
+router2(config-if)# ip ospf hello-interval 10
+router2(config-if)# ip ospf dead-interval 30
+router2(config-if)# exit
+router2(config)# 
+router2(config)# router ospf
+router2(config-router)# router-id 2.2.2.2
+router2(config-router)# network 10.0.10.0/30 area 0
+router2(config-router)# network 10.0.11.0/30 area 0
+router2(config-router)# network 192.168.20.0/24 area 0
+router2(config-router)# 
+router2(config-router)# neighbor 10.0.10.1
+router2(config-router)# neighbor 10.0.11.1
+router2(config-router)# 
+router2(config-router)# exit
+router2(config)# 
+router2(config)# log file /var/log/frr/frr.log
+router2(config)# exit
+router2# 
+router2# write memory 
+Note: this version of vtysh never writes vtysh.conf
+Building Configuration...
+Integrated configuration saved to /etc/frr/frr.conf
+[OK]
+router2# 
+router2# exit
+root@router2:~# 
+root@router2:~# cat /etc/frr/frr.conf
+frr version 10.7.1
+frr defaults traditional
+hostname router2
+log syslog informational
+log file /var/log/frr/frr.log
+service integrated-vtysh-config
+!
+interface eth1
+ description r1-r2
+ ip address 10.0.10.2/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth2
+ description r2-r3
+ ip address 10.0.11.2/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth3
+ description net_router2
+ ip address 192.168.20.1/24
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+router ospf
+ ospf router-id 2.2.2.2
+ network 10.0.10.0/30 area 0
+ network 10.0.11.0/30 area 0
+ network 192.168.20.0/24 area 0
+ neighbor 10.0.10.1
+ neighbor 10.0.11.1
+exit
+!
+root@router2:~# 
+root@router2:~# ll /etc/frr/frr.conf
+-rw-r----- 1 frr frr 706 Nov 14 16:00 /etc/frr/frr.conf
+root@router2:~# 
+
+
+[admin_insta11@mv334 ospf_lab]$ vagrant ssh router3
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Last login: Sat Nov 14 15:33:43 2026 from 10.0.2.2
+vagrant@router3:~$ 
+vagrant@router3:~$ sudo -i
+root@router3:~# 
+root@router3:~# systemctl stop ufw
+root@router3:~# systemctl disable ufw
+Synchronizing state of ufw.service with SysV service script with /lib/systemd/systemd-sysv-install.
+Executing: /lib/systemd/systemd-sysv-install disable ufw
+Removed /etc/systemd/system/multi-user.target.wants/ufw.service.
+root@router3:~# 
+root@router3:~# mkdir -p /etc/apt/keyrings
+root@router3:~# 
+root@router3:~# curl -fsSL https://deb.frrouting.org/frr/keys.asc | sudo gpg --dearmor -o /etc/apt/keyrings/frr.gpg
+root@router3:~# 
+root@router3:~# echo "deb [signed-by=/etc/apt/keyrings/frr.gpg] https://deb.frrouting.org/frr $(lsb_release -cs) frr-stable" | sudo tee /etc/apt/sources.list.d/frr.list
+deb [signed-by=/etc/apt/keyrings/frr.gpg] https://deb.frrouting.org/frr jammy frr-stable
+root@router3:~# 
+root@router3:~# apt update
+<...>
+root@router3:~# 
+root@router3:~# apt install frr frr-pythontools
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libc-ares2 libpcre2-posix3 libyang3
+Suggested packages:
+  frr-doc
+The following NEW packages will be installed:
+  frr frr-pythontools libc-ares2 libpcre2-posix3 libyang3
+0 upgraded, 5 newly installed, 0 to remove and 200 not upgraded.
+Need to get 7,808 kB of archives.
+After this operation, 43.1 MB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+<...>
+root@router3:~# 
+root@router3:~# apt install traceroute tcpdump net-tools
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+tcpdump is already the newest version (4.99.1-3ubuntu0.2).
+The following NEW packages will be installed:
+  net-tools traceroute
+0 upgraded, 2 newly installed, 0 to remove and 200 not upgraded.
+Need to get 250 kB of archives.
+After this operation, 971 kB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+<...>
+root@router3:~# 
+root@router3:~# sysctl net.ipv4.conf.all.forwarding=1
+net.ipv4.conf.all.forwarding = 1
+root@router3:~# 
+root@router3:~# sysctl -w net.ipv6.conf.all.disable_ipv6=1
+net.ipv6.conf.all.disable_ipv6 = 1
+root@router3:~# 
+root@router3:~# vi /etc/frr/daemons
+root@router3:~# 
+root@router3:~# 
+root@router3:~# cat /etc/frr/daemons | grep "zebra\|ospf"
+# The watchfrr, zebra and staticd daemons are always started.
+ospfd=yes
+ospf6d=no
+zebra_options="  -A 127.0.0.1 -s 90000000"
+ospfd_options="  -A 127.0.0.1"
+ospf6d_options=" -A ::1"
+root@router3:~# 
+root@router3:~# systemctl restart frr.service
+root@router3:~# 
+root@router3:~# systemctl status frr.service
+● frr.service - FRRouting
+     Loaded: loaded (/lib/systemd/system/frr.service; enabled; vendor preset: enabled)
+     Active: active (running) since Sun 2026-11-15 11:09:07 UTC; 13s ago
+       Docs: https://frrouting.readthedocs.io/en/latest/setup.html
+    Process: 3165 ExecStart=/usr/lib/frr/frrinit.sh start (code=exited, status=0/SUCCESS)
+   Main PID: 3176 (watchfrr)
+     Status: "FRR Operational"
+      Tasks: 17 (limit: 3425)
+     Memory: 29.3M
+        CPU: 542ms
+     CGroup: /system.slice/frr.service
+             ├─3176 /usr/lib/frr/watchfrr -d mgmtd zebra bgpd ospfd staticd
+             ├─3188 /usr/lib/frr/mgmtd -d -F traditional -A 127.0.0.1
+             ├─3190 /usr/lib/frr/zebra -d -F traditional -A 127.0.0.1 -s 90000000
+             ├─3195 /usr/lib/frr/bgpd -d -F traditional -A 127.0.0.1
+             ├─3202 /usr/lib/frr/ospfd -d -F traditional -A 127.0.0.1
+             └─3205 /usr/lib/frr/staticd -d -F traditional -A 127.0.0.1
+
+Nov 15 11:09:07 router3 frrinit.sh[3229]: [3229|watchfrr] done
+Nov 15 11:09:07 router3 watchfrr[3176]: [QDG3Y-BY5TN] mgmtd state -> up : connect succeeded
+Nov 15 11:09:07 router3 watchfrr[3176]: [QDG3Y-BY5TN] zebra state -> up : connect succeeded
+Nov 15 11:09:07 router3 watchfrr[3176]: [QDG3Y-BY5TN] bgpd state -> up : connect succeeded
+Nov 15 11:09:07 router3 watchfrr[3176]: [QDG3Y-BY5TN] ospfd state -> up : connect succeeded
+Nov 15 11:09:07 router3 watchfrr[3176]: [QDG3Y-BY5TN] staticd state -> up : connect succeeded
+Nov 15 11:09:07 router3 watchfrr[3176]: [KWE5Q-QNGFC] all daemons up, doing startup-complete notify
+Nov 15 11:09:07 router3 frrinit.sh[3165]:  * Started watchfrr
+Nov 15 11:09:07 router3 systemd[1]: Started FRRouting.
+Nov 15 11:09:08 router3 zebra[3190]: [V98V0-MTWPF] client 59 says hello and bids fair to announce only bgp routes vrf=0
+root@router3:~# 
+root@router3:~# vtysh
+
+Hello, this is FRRouting (version 10.7.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router3# show interface brief
+Interface       Status  VRF             Addresses
+---------       ------  ---             ---------
+eth0            up      default         10.0.2.15/24
+eth1            up      default         10.0.11.1/30
+eth2            up      default         10.0.12.2/30
+eth3            up      default         192.168.30.1/24
+eth4            up      default         192.168.50.12/24
+lo              up      default         
+
+router3# 
+router3# sh run
+Building configuration...
+
+Current configuration:
+!
+frr version 10.7.1
+frr defaults traditional
+hostname router3
+log syslog informational
+service integrated-vtysh-config
+!
+end
+router3# 
+router3# conf t
+router3(config)# interface eth1
+router3(config-if)# description r3-r2
+router3(config-if)# ip a
+address         authentication  
+router3(config-if)# ip address 10.0.11.1/30
+router3(config-if)# ip ospf mtu-ignore
+router3(config-if)# ip ospf hello-interval 10
+router3(config-if)# ip ospf dead-interval 30
+router3(config-if)# 
+router3(config-if)# interface eth2
+router3(config-if)# description r3-r1
+router3(config-if)# ip address 10.0.12.2/30
+router3(config-if)# ip ospf mtu-ignore
+router3(config-if)# ip ospf hello-interval 10
+router3(config-if)# ip ospf dead-interval 30
+router3(config-if)# 
+router3(config-if)# interface eth3
+router3(config-if)# description net_router3
+router3(config-if)# ip address 192.168.30.1/24
+router3(config-if)# ip ospf mtu-ignore
+router3(config-if)# ip ospf hello-interval 10
+router3(config-if)# ip ospf dead-interval 30
+router3(config-if)# 
+router3(config-if)# exit
+router3(config)# 
+router3(config)# router ospf
+router3(config-router)# router-id 3.3.3.3
+router3(config-router)# network 10.0.11.0/30 area 0
+router3(config-router)# network 10.0.12.0/30 area 0
+router3(config-router)# network 192.168.30.1/24 area 0
+router3(config-router)# neighbor 10.0.11.2
+router3(config-router)# neighbor 10.0.12.1
+router3(config-router)# exit
+router3(config)# 
+router3(config)# log file /var/log/frr/frr.log
+router3(config)# exit
+router3# 
+router3# wri mem
+Note: this version of vtysh never writes vtysh.conf
+Building Configuration...
+Integrated configuration saved to /etc/frr/frr.conf
+[OK]
+router3# 
+router3# exit
+root@router3:~# cat /etc/frr/frr.conf
+frr version 10.7.1
+frr defaults traditional
+hostname router3
+log syslog informational
+log file /var/log/frr/frr.log
+service integrated-vtysh-config
+!
+interface eth1
+ description r3-r2
+ ip address 10.0.11.1/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth2
+ description r3-r1
+ ip address 10.0.12.2/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth3
+ description net_router3
+ ip address 192.168.30.1/24
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+router ospf
+ ospf router-id 3.3.3.3
+ network 10.0.11.0/30 area 0
+ network 10.0.12.0/30 area 0
+ network 192.168.30.0/24 area 0
+ neighbor 10.0.11.2
+ neighbor 10.0.12.1
+exit
+!
+root@router3:~#
+root@router3:~# ll /etc/frr/frr.conf
+-rw-r----- 1 frr frr 706 Nov 14 16:00 /etc/frr/frr.conf
+root@router3:~# 
+```
+
