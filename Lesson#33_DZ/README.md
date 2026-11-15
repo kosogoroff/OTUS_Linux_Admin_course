@@ -38,14 +38,17 @@ OSPF
 | Server      | IP and netmask      | Interface       | Default route on the host    |
 |:---------------------------------------|:---------------|:-------------------------|:------------------------|
 | router1       | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
-|                | 192.168.255.1/30                       | eth1         |           |        
-| inetRouter2    | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
-|                | 192.168.255.21/30                      | eth1        |           |
-| centralRouter  | 192.168.255.2/30                       | eth1        | To 192.168.255.1 via eth1        |
-|                | 192.168.255.22/30                      | eth2        |           |
-|                | 192.168.0.1/28                      | eth3        |           |
-| centralServer  | 192.168.0.2/28                      | eth1        | To 192.168.0.1 via eth1          |
-
+|                | 10.0.10.1/30                          | eth1         |           |        
+|                | 10.0.12.1/30                          | eth2         |           |        
+|                | 192.168.10.1/24                       | eth3         |           |        
+| router2       | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
+|                | 10.0.10.2/30                          | eth1         |           |        
+|                | 10.0.11.2/30                          | eth2         |           |        
+|                | 192.168.20.1/24                       | eth3         |           |
+| router3       | Default NAT address DHCP virtualbox    | eth0      | To 10.0.2.2 virtualbox router via eth0 |
+|                | 10.0.11.1/30                          | eth1         |           |        
+|                | 10.0.12.2/30                          | eth2         |           |        
+|                | 192.168.30.1/24                       | eth3         |           |
 
 Vagrantfile для создания лабораторного стенда приведён ниже:
 
@@ -116,10 +119,9 @@ Vagrant.configure("2") do |config|
 end
 ```
 
-По сравнению с Vagrantfile в приведённом сделано несколько изменений:
+По сравнению с исходным Vagrantfile из методички в приведённом сделано несколько изменений:
 
-1. Добавлена возможность в явном виде указывать название бокса Vagrant для создания виртуальных машин из командной строки - в том числе и из
-   числа локально скачанных боксов Vagrant:
+1. Добавлена возможность в явном виде указывать название бокса Vagrant для создания виртуальных машин из командной строки - в том числе и из числа локально скачанных боксов Vagrant:
 
 ```
 [admin_insta11@mv334 ospf_lab]$ vagrant box list
@@ -379,4 +381,264 @@ router2                   running (virtualbox)
 router3                   running (virtualbox)
 
 [admin_insta11@mv334 ospf_lab]$
+```
+
+
+2.1 Установка пакетов и конфигурирование router1
+
+Отключаем ufw:
+
+```
+admin_insta11@mv334 ospf_lab]$ vagrant ssh router1
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+vagrant@router1:~$ 
+vagrant@router1:~$ sudo -i
+root@router1:~# 
+root@router1:~# systemctl stop ufw
+root@router1:~# systemctl disable ufw
+Synchronizing state of ufw.service with SysV service script with /lib/systemd/systemd-sysv-install.
+Executing: /lib/systemd/systemd-sysv-install disable ufw
+Removed /etc/systemd/system/multi-user.target.wants/ufw.service.
+root@router1:~# 
+root@router1:~# 
+
+```
+
+Устанавливаем ключи пакета frr, репозиторий frr и устанавливаем пакет frr:
+
+**ПРИМЕЧАНИЕ:** установка ключей при помощи apt-key выдаёт предупреждение:
+
+```
+root@router1:~# curl -s https://deb.frrouting.org/frr/keys.asc | sudo apt-key add -
+Warning: apt-key is deprecated. Manage keyring files in trusted.gpg.d instead (see apt-key(8)).
+OK
+root@router1:~#
+```
+
+ => метод установки ключей с помощью apt-key устарел, и будет работать только до Ubuntu 22.04.
+
+ Поэтому устанавливаем ключи репозитория следующим методом:
+
+-    ключ скачивается, «разарморивается» (gpg --dearmor, потому что он в текстовом ASCII-виде, переводится обратно в бинарный вид для использования при проверке репозиториев) и кладётся в /etc/apt/keyrings/ — место, предназначенное именно для ключей конкретных репозиториев. **Примечание:** Файл должен называться *.gpg (бинарный keyring) или *.asc (ASCII) — apt игнорирует другие расширения. И не кладите туда «сырой» ASCII-ключ с расширением .gpg без dearmor'а — apt его не прочитает. Файл в формате .asc - это так называемый ASCII-armor: «настоящие» двоичные данные PGP закодированы в текст (по сути, в Base64), к ним добавлены заголовки и разделители.;
+
+-    в строке репозитория опция [signed-by=...] привязывает его к этому конкретному репозиторию — пакетный менеджер будет проверять подписи только им, а не всеми ключами подряд;
+
+-    ключ не попадает в общесистемный trusted.gpg.d, где он доверялся бы вообще для всех репозиториев (в том числе сторонних) — это плюс к безопасности.
+
+
+ ```
+root@router1:~# sudo mkdir -p /etc/apt/keyrings
+root@router1:~# 
+root@router1:~# curl -fsSL https://deb.frrouting.org/frr/keys.asc | sudo gpg --dearmor -o /etc/apt/keyrings/frr.gpg
+root@router1:~# 
+root@router1:~# echo "deb [signed-by=/etc/apt/keyrings/frr.gpg] https://deb.frrouting.org/frr $(lsb_release -cs) frr-stable" | sudo tee /etc/apt/sources.list.d/frr.list
+deb [signed-by=/etc/apt/keyrings/frr.gpg] https://deb.frrouting.org/frr jammy frr-stable
+root@router1:~#
+```
+
+Далее устанавливаем пакет frr:
+
+```
+root@router1:~# sudo apt update
+Hit:1 http://us.archive.ubuntu.com/ubuntu jammy InRelease                                       
+Get:2 http://security.ubuntu.com/ubuntu jammy-security InRelease [129 kB]                       
+Get:3 http://us.archive.ubuntu.com/ubuntu jammy-updates InRelease [128 kB]
+<...>
+root@router1:~# apt install frr frr-pythontools
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libc-ares2 libpcre2-posix3 libyang3
+Suggested packages:
+  frr-doc
+The following NEW packages will be installed:
+  frr frr-pythontools libc-ares2 libpcre2-posix3 libyang3
+0 upgraded, 5 newly installed, 0 to remove and 200 not upgraded.
+Need to get 7,808 kB of archives.
+After this operation, 43.1 MB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+Get:1 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 libc-ares2 amd64 1.18.1-1ubuntu0.22.04.4 [45.2 kB]
+Get:2 http://us.archive.ubuntu.com/ubuntu jammy-updates/main amd64 libpcre2-posix3 amd64 10.39-3ubuntu0.2 [6,134 B]
+Get:3 https://deb.frrouting.org/frr jammy/frr-stable amd64 libyang3 amd64 3.13.6-1~ubuntu22.04u1 [610 kB]
+Get:4 https://deb.frrouting.org/frr jammy/frr-stable amd64 frr amd64 10.7.1-0~ubuntu22.04.1 [7,081 kB]
+Get:5 https://deb.frrouting.org/frr jammy/frr-stable amd64 frr-pythontools all 10.7.1-0~ubuntu22.04.1 [66.1 kB]
+Fetched 7,808 kB in 4s (1,788 kB/s)
+<...>
+root@router1:~#
+```
+
+Устанавливаем также дополнительные пакеты:
+
+```
+root@router1:~# apt install traceroute tcpdump net-tools
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+<...>
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+root@router1:~# 
+```
+
+Включаем форвардинг пакетов в ядре (обязательный пункт для всех маршрутизаторов - разрешает пересылку пакетов между интерфейсами):
+
+```
+root@router1:~# sysctl net.ipv4.conf.all.forwarding=1
+net.ipv4.conf.all.forwarding = 1
+root@router1:~#
+```
+
+Отключаем ipv6 (необязательный пункт, отключает использование IPv6 в ядре - в данном случае только для того, чтобы
+команды 'ip address' и ‘show interfaces brief’ в frr vtysh не выводили IPv6 адреса, с которыми мы не работаем):
+
+```
+root@router1:~# sysctl -w net.ipv6.conf.all.disable_ipv6=1
+net.ipv6.conf.all.disable_ipv6 = 1
+root@router1:~# 
+```
+
+Включаем в конфигурации frr необходимые демоны и перезагружаем frr для применения:
+
+```
+root@router1:~# vi /etc/frr/daemons
+root@router1:~#
+root@router1:~# cat /etc/frr/daemons | grep "zebra\|ospf\|bgp"
+# The watchfrr, zebra and staticd daemons are always started.
+bgpd=yes
+ospfd=yes
+ospf6d=no
+<...>
+root@router1:~# 
+oot@router1:~# systemctl restart frr.service
+root@router1:~# systemctlstatus frr.service
+-bash: systemctlstatus: command not found
+root@router1:~# systemctl status frr.service
+● frr.service - FRRouting
+     Loaded: loaded (/lib/systemd/system/frr.service; enabled; vendor preset: enabled)
+     Active: active (running) since Sat 2026-11-14 15:49:12 UTC; 16s ago
+       Docs: https://frrouting.readthedocs.io/en/latest/setup.html
+    Process: 3229 ExecStart=/usr/lib/frr/frrinit.sh start (code=exited, status=0/SUCCESS)
+   Main PID: 3240 (watchfrr)
+     Status: "FRR Operational"
+      Tasks: 17 (limit: 3425)
+     Memory: 29.2M
+        CPU: 523ms
+     CGroup: /system.slice/frr.service
+             ├─3240 /usr/lib/frr/watchfrr -d mgmtd zebra bgpd ospfd staticd
+             ├─3252 /usr/lib/frr/mgmtd -d -F traditional -A 127.0.0.1
+             ├─3254 /usr/lib/frr/zebra -d -F traditional -A 127.0.0.1 -s 90000000
+             ├─3259 /usr/lib/frr/bgpd -d -F traditional -A 127.0.0.1
+             ├─3266 /usr/lib/frr/ospfd -d -F traditional -A 127.0.0.1
+             └─3269 /usr/lib/frr/staticd -d -F traditional -A 127.0.0.1
+
+Nov 14 15:49:12 router1 watchfrr[3240]: [QDG3Y-BY5TN] zebra state -> up : connect succeeded
+Nov 14 15:49:12 router1 watchfrr[3240]: [QDG3Y-BY5TN] bgpd state -> up : connect succeeded
+Nov 14 15:49:12 router1 watchfrr[3240]: [QDG3Y-BY5TN] ospfd state -> up : connect succeeded
+Nov 14 15:49:12 router1 watchfrr[3240]: [QDG3Y-BY5TN] staticd state -> up : connect succeeded
+Nov 14 15:49:12 router1 watchfrr[3240]: [KWE5Q-QNGFC] all daemons up, doing startup-complete notify
+Nov 14 15:49:12 router1 frrinit.sh[3229]:  * Started watchfrr
+Nov 14 15:49:12 router1 systemd[1]: Started FRRouting.
+Nov 14 15:49:13 router1 zebra[3254]: [V98V0-MTWPF] client 59 says hello and bids fair to announce only bgp routes vrf=0
+Nov 14 15:49:27 router1 zebra[3254]: [SAPXX-HP5B5][EC 4043309108] Extended Error: failed to retrieve link settings
+Nov 14 15:49:27 router1 zebra[3254]: [WVJCK-PPMGD][EC 4043309093] generic-netlink-cmd (NS 0) error: Operation not supported, type=RTM_DELADDR(21>
+root@router1:~# 
+```
+
+Далее конфигурируем ospf в frr в соответствии с заданием:
+
+```
+oot@router1:~# vtysh
+
+Hello, this is FRRouting (version 10.7.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router1# interface eth1
+% Unknown command: interface eth1
+router1# 
+router1# conf t
+router1(config)# interface eth1
+router1(config-if)# description r1-r2
+router1(config-if)# ip address 10.0.10.1/30
+router1(config-if)# ip ospf mtu-ignore
+router1(config-if)# ip ospf hello-interval 10
+router1(config-if)# ip ospf dead-interval 30
+router1(config-if)# interface eth2
+router1(config-if)# description r1-r3
+router1(config-if)# ip address 10.0.12.1/30
+router1(config-if)# ip ospf mtu-ignore
+router1(config-if)# ip ospf hello-interval 10
+router1(config-if)# ip ospf dead-interval 30
+router1(config-if)# 
+router1(config-if)# interface eth3
+router1(config-if)# description net_router1
+router1(config-if)# ip address 192.168.10.1/24
+router1(config-if)# ip ospf mtu-ignore
+router1(config-if)# ip ospf hello-interval 10
+router1(config-if)# ip ospf dead-interval 30
+router1(config-if)# 
+router1(config-if)# exit
+router1(config)# 
+router1(config)# router ospf
+router1(config-router)# router-id 1.1.1.1
+router1(config-router)# network 10.0.10.0/30 area 0
+router1(config-router)#  network 10.0.12.0/30 area 0
+router1(config-router)#  network 192.168.10.0/24 area 0
+router1(config-router)# 
+router1(config-router)# neighbor 10.0.10.2
+router1(config-router)# neighbor 10.0.12.2
+router1(config-router)# default-information originate always
+router1(config-router)# exit
+router1(config)# log file /var/log/frr/frr.log
+router1(config)# exit
+router1# 
+router1# write memory 
+Note: this version of vtysh never writes vtysh.conf
+Building Configuration...
+Integrated configuration saved to /etc/frr/frr.conf
+[OK]
+router1# 
+router1# exit
+root@router1:~# 
+root@router1:~# cat /etc/frr/frr.conf
+frr version 10.7.1
+frr defaults traditional
+hostname router1
+log syslog informational
+log file /var/log/frr/frr.log
+service integrated-vtysh-config
+!
+interface eth1
+ description r1-r2
+ ip address 10.0.10.1/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth2
+ description r1-r3
+ ip address 10.0.12.1/30
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+interface eth3
+ description net_router1
+ ip address 192.168.10.1/24
+ ip ospf dead-interval 30
+ ip ospf mtu-ignore
+exit
+!
+router ospf
+ ospf router-id 1.1.1.1
+ network 10.0.10.0/30 area 0
+ network 10.0.12.0/30 area 0
+ network 192.168.10.0/24 area 0
+ neighbor 10.0.10.2
+ neighbor 10.0.12.2
+ default-information originate always
+exit
+!
+root@router1:~# 
 ```
