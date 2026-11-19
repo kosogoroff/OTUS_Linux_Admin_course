@@ -183,6 +183,7 @@ root@server:~#
 
 1.2.1 Конфигурирование openvpn на ВМ1, генерация ключа, пересылка его на ВМ2:
 
+```
 root@server:~# openvpn --genkey secret /etc/openvpn/static.key
 root@server:~# 
 root@server:~# vim /etc/openvpn/server.conf
