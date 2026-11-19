@@ -137,7 +137,7 @@ This environment represents multiple VMs. The VMs are all listed
 above with their current state. For more information about a specific
 VM, run `vagrant status NAME`.
 [admin_insta11@mv334 vpn_lab]$
-
+```
 
 1. Организация защищённого соединения между ВМ с использованием OpenVPN.
 
