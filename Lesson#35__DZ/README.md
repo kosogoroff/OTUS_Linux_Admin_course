@@ -1260,11 +1260,11 @@ traceroute to 10.10.10.1 (10.10.10.1), 30 hops max, 60 byte packets
 ```
 
 
-3. Конфигурирование RAS сервера через vagrant + ansible
+## 3. Конфигурирование RAS сервера через vagrant + ansible
 
 Ниже приведены Vagrantfile и ansible playbook для выполнения всех конфигураций RAS сервера, сделанных в предыдущем разделе:
 
-Vagrantfile
+Vagrantfile :
 
 ```
 [admin_insta11@mv334 vpn_lab]$ cat Vagrantfile 
@@ -1295,7 +1295,7 @@ Vagrant.configure("2") do |config|
 end
 ```
 
-ansible playbook.yml
+ansible playbook.yml :
 
 ```
 [admin_insta11@mv334 vpn_lab]$ cat ansible/playbook.yml 
