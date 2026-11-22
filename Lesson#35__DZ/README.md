@@ -1260,6 +1260,452 @@ traceroute to 10.10.10.1 (10.10.10.1), 30 hops max, 60 byte packets
 ```
 
 
+3. Конфигурирование RAS сервера через vagrant + ansible
+
+Ниже приведены Vagrantfile и ansible playbook для выполнения всех конфигураций RAS сервера, сделанных в предыдущем разделе:
+
+Vagrantfile
+
+```
+[admin_insta11@mv334 vpn_lab]$ cat Vagrantfile 
+BOX_NAME = ENV['VAGRANT_BOX'] || 'bento/ubuntu-22.04'
+
+Vagrant.configure("2") do |config|
+  config.vm.box = BOX_NAME
+
+  # Хук: срабатывает непосредственно перед запуском каждого провизионера,
+  # в том числе при первом vagrant up
+  config.trigger.before :provisioner_run, type: :hook do |trigger|
+    trigger.info = "Генерируем inventory..."
+    trigger.run = { path: "./generate_inventory.sh" }
+    trigger.on_error = :halt   # упал скрипт — остановить vagrant, а не проскочить
+  end
+
+  config.vm.define "server" do |server|
+    server.vm.hostname = "server.loc"
+    server.vm.network "private_network", ip: "192.168.56.10"
+
+    server.vm.provision "ansible" do |ansible|
+      ansible.playbook = "ansible/playbook.yml"
+      ansible.inventory_path = "ansible/hosts"
+      ansible.host_key_checking = false
+      ansible.limit = "all"
+    end
+  end
+end
+```
+
+ansible playbook.yml
+
+```
+[admin_insta11@mv334 vpn_lab]$ cat ansible/playbook.yml 
+---
+- name: Настройка OpenVPN-сервера ( туннель, PKI, сервис)
+  hosts: vagrant_boxes
+  become: true
+
+  vars:
+    easyrsa_cmd: /usr/share/easy-rsa/easyrsa
+    pki_dir: /etc/openvpn/pki
+    etc_openvpn: /etc/openvpn
+    shared_dir: /vagrant/vpn_lab        # синхронизированная папка Vagrant
+
+  tasks:
+    # ---------- Пакеты и базовая подготовка ----------
+    - name: Обновить кэш apt
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Установить пакеты
+      ansible.builtin.apt:
+        name:
+          - openvpn
+          - easy-rsa
+          - iperf3
+          - selinux-utils
+          - traceroute
+        state: present
+
+    - name: Перевести SELinux в permissive (lab)
+      ansible.builtin.command: setenforce 0
+      changed_when: false
+      failed_when: false        # если SELinux отсутствует — не падать
+
+    - name: SELinux permissive после перезагрузки
+      ansible.posix.selinux:
+        policy: targeted
+        state: permissive
+      failed_when: false
+
+    # ---------- PKI (каждый шаг идемпотентен через creates) ----------
+    - name: Инициализация PKI
+      ansible.builtin.command:
+        cmd: "{{ easyrsa_cmd }} init-pki"
+        chdir: "{{ etc_openvpn }}"
+      args:
+        creates: "{{ pki_dir }}"
+
+    - name: Сборка корневого CA
+      ansible.builtin.shell: |
+        echo 'rasvpn' | {{ easyrsa_cmd }} build-ca nopass
+      args:
+        chdir: "{{ etc_openvpn }}"
+        creates: "{{ pki_dir }}/private/ca.key"
+
+    - name: Запрос на подпись для сервера
+      ansible.builtin.shell: |
+        echo 'rasvpn' | {{ easyrsa_cmd }} gen-req server nopass
+      args:
+        chdir: "{{ etc_openvpn }}"
+        creates: "{{ pki_dir }}/reqs/server.req"
+
+    - name: Подписание серверного сертификата CA
+      ansible.builtin.shell: |
+        echo 'yes' | {{ easyrsa_cmd }} sign-req server server
+      args:
+        chdir: "{{ etc_openvpn }}"
+        creates: "{{ pki_dir }}/issued/server.crt"
+
+    - name: Параметры Диффи-Хеллмана
+      ansible.builtin.command:
+        cmd: "{{ easyrsa_cmd }} gen-dh"
+        chdir: "{{ etc_openvpn }}"
+      args:
+        creates: "{{ pki_dir }}/dh.pem"
+
+    - name: Статический ключ OpenVPN (tls-auth/tls-crypt, не ключ CA!)
+      ansible.builtin.command:
+        cmd: openvpn --genkey secret /etc/openvpn/ca.key
+      args:
+        creates: "{{ etc_openvpn }}/ca.key"
+
+    - name: Запрос на подпись для клиента
+      ansible.builtin.shell: |
+        echo 'client' | {{ easyrsa_cmd }} gen-req client nopass
+      args:
+        chdir: "{{ etc_openvpn }}"
+        creates: "{{ pki_dir }}/reqs/client.req"
+
+    - name: Подписание клиентского сертификата CA
+      ansible.builtin.shell: |
+        echo 'yes' | {{ easyrsa_cmd }} sign-req client client
+      args:
+        chdir: "{{ etc_openvpn }}"
+        creates: "{{ pki_dir }}/issued/client.crt"
+
+    # ---------- Копирование в синхронизированную папку Vagrant ----------
+    - name: Создать каталог для ключей клиента
+      ansible.builtin.file:
+        path: "{{ shared_dir }}/client"
+        state: directory
+        mode: "0755"
+
+    - name: Раздать сертификаты и ключи в общую папку
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ shared_dir }}/client/{{ item.dest }}"
+        remote_src: true
+        mode: "0600"
+      loop:
+        - { src: "{{ pki_dir }}/ca.crt",                  dest: ca.crt }
+        - { src: "{{ pki_dir }}/issued/client.crt",       dest: client.crt }
+        - { src: "{{ pki_dir }}/private/client.key",      dest: client.key }
+
+    # ---------- Конфигурация сервера ----------
+    - name: server.conf (без ручного push — его делает макрос server)
+      ansible.builtin.copy:
+        dest: "{{ etc_openvpn }}/server.conf"
+        mode: "0644"
+        content: |
+          port 1207
+          proto udp
+          dev tun
+          ca {{ pki_dir }}/ca.crt
+          cert {{ pki_dir }}/issued/server.crt
+          key {{ pki_dir }}/private/server.key
+          dh {{ pki_dir }}/dh.pem
+          server 10.10.10.0 255.255.255.0
+          ifconfig-pool-persist ipp.txt
+          client-to-client
+          client-config-dir {{ etc_openvpn }}/client
+          status-version 3
+          keepalive 10 120
+          comp-lzo
+          persist-key
+          persist-tun
+          status /var/log/openvpn-status.log
+          log /var/log/openvpn.log
+          verb 3
+
+    # ---------- systemd-сервис ----------
+    - name: Юнит openvpn@.service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/openvpn@.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=OpenVPN Tunneling Application On %I
+          After=network.target
+
+          [Service]
+          Type=notify
+          PrivateTmp=true
+          ExecStart=/usr/sbin/openvpn --cd /etc/openvpn/ --config %i.conf
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Перезагрузить systemd
+
+    - name: Каталог для CCD
+      ansible.builtin.file:
+        path: "{{ etc_openvpn }}/client"
+        state: directory
+        mode: "0755"
+
+    - name: Запустить и включить openvpn@server
+      ansible.builtin.systemd:
+        name: openvpn@server
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Перезагрузить systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+```
+
+Вспомогательный скрипт для автоматического создания файла ansible inventory:
+
+```
+[admin_insta11@mv334 vpn_lab]$ cat generate_inventory.sh 
+#!/usr/bin/env bash
+
+INVENTORY="inventory.ini"
+> "$INVENTORY"
+
+echo "[vagrant_boxes]" > "$INVENTORY"
+echo "" >> "$INVENTORY"
+
+# Объявляем ассоциативные массивы для хранения данных
+declare -A HOSTS_PORT
+declare -A HOSTS_NAME
+declare -A HOSTS_KEY
+
+current_host=""
+
+# Читаем вывод vagrant ssh-config
+while IFS= read -r line; do
+#    echo "line= $line"
+
+    # Если встретили Host, запоминаем имя текущего хоста
+    if [[ "$line" =~ ^Host[[:space:]]+([^[:space:]]+) ]]; then
+        current_host="${BASH_REMATCH[1]}"
+#        echo ">>> Обнаружен хост: $current_host"
+    fi
+
+    # Если есть текущий хост, пытаемся собрать для него данные
+    if [[ -n "$current_host" ]]; then
+        # Собираем Port
+        if [[ "$line" =~ ^[[:space:]]*Port[[:space:]]+([0-9]+) ]]; then
+            HOSTS_PORT["$current_host"]="${BASH_REMATCH[1]}"
+#            echo "Port= ${HOSTS_PORT[$current_host]}"
+        fi
+
+        # Собираем IdentityFile
+        if [[ "$line" =~ ^[[:space:]]*IdentityFile[[:space:]]+\"?([^\"]+)\"? ]]; then
+            HOSTS_KEY["$current_host"]="${BASH_REMATCH[1]}"
+#            echo "Key= ${HOSTS_KEY[$current_host]}"
+        fi
+
+	        # Собираем HostName
+        if [[ "$line" =~ ^[[:space:]]*HostName[[:space:]]+\"?([^\"]+)\"? ]]; then
+            HOSTS_NAME["$current_host"]="${BASH_REMATCH[1]}"
+#            echo "Key= ${HOSTS_NAME[$current_host]}"
+        fi
+    fi
+done < <(vagrant ssh-config)
+
+# ТЕПЕРЬ ВЫВОДИМ ВСЁ СРАЗУ
+# Проходим по всем найденным хостам
+for host in "${!HOSTS_PORT[@]}"; do
+    port="${HOSTS_PORT[$host]}"
+    key="${HOSTS_KEY[$host]}"
+    name="${HOSTS_NAME[$host]}"
+    
+    # Проверка: есть ли и порт, и ключ
+    if [[ -n "$port" && -n "$key" ]]; then
+        clean_key="${key//\"/}"
+        echo "$host ansible_host=$name ansible_port=$port ansible_private_key_file=$clean_key" >> "$INVENTORY"
+        echo ">>> ЗАПИСАНО: $host (port=$port)"
+    else
+        echo "⚠️ Пропущен $host: нет полных данных (port='$port', key='$key', name='$name')"
+    fi
+done
+
+# Добавляем переменные группы
+echo "" >> "$INVENTORY"
+echo "[vagrant_boxes:vars]" >> "$INVENTORY"
+echo "ansible_user=vagrant" >> "$INVENTORY"
+echo "ansible_python_interpreter=/usr/bin/python3" >> "$INVENTORY"
+echo "host_key_checking=False" >> "$INVENTORY"
+
+echo "✅ Готово! Содержимое inventory.ini:"
+cat "$INVENTORY"
+
+mkdir -p ansible
+cp inventory.ini ansible/hosts
+```
+
+При запуске ВМ RAS сервера успешно создаётся и конфигурируется, сгенерированные для клиента/хоста ключи копируются в директорию 
+vpn_lab/client/:
+
+```
+[admin_insta11@mv334 vpn_lab]$ VAGRANT_BOX=ubuntu-22.04-virtualbox vagrant up
+Bringing machine 'server' up with 'virtualbox' provider...
+==> server: Importing base box 'ubuntu-22.04-virtualbox'...
+==> server: Matching MAC address for NAT networking...
+==> server: Setting the name of the VM: vpn_lab_server_1795355418357_71840
+==> server: Clearing any previously set network interfaces...
+==> server: Preparing network interfaces based on configuration...
+    server: Adapter 1: nat
+    server: Adapter 2: hostonly
+==> server: Forwarding ports...
+    server: 22 (guest) => 2222 (host) (adapter 1)
+==> server: Booting VM...
+==> server: Waiting for machine to boot. This may take a few minutes...
+    server: SSH address: 127.0.0.1:2222
+    server: SSH username: vagrant
+    server: SSH auth method: private key
+    server: 
+    server: Vagrant insecure key detected. Vagrant will automatically replace
+    server: this with a newly generated keypair for better security.
+    server: 
+    server: Inserting generated public key within guest...
+    server: Removing insecure key from the guest if it's present...
+    server: Key inserted! Disconnecting and reconnecting using new SSH key...
+==> server: Machine booted and ready!
+==> server: Checking for guest additions in VM...
+    server: The guest additions on this VM do not match the installed version of
+    server: VirtualBox! In most cases this is fine, but in rare cases it can
+    server: prevent things such as shared folders from working properly. If you see
+    server: shared folder errors, please make sure the guest additions within the
+    server: virtual machine match the version of VirtualBox you have installed on
+    server: your host and reload your VM.
+    server: 
+    server: Guest Additions Version: 7.2.4
+    server: VirtualBox Version: 7.1
+==> server: Setting hostname...
+==> server: Configuring and enabling network interfaces...
+==> server: Mounting shared folders...
+    server: /home/admin_insta11/vpn_lab => /vagrant
+==> server: Running provisioner: ansible...
+==> server: Running hook triggers before provisioner_run ...
+==> server: Running trigger...
+==> server: Генерируем inventory...
+    server: Running local script: ./generate_inventory.sh
+    server: >>> ЗАПИСАНО: server (port=2222)
+    server: 
+    server: ✅ Готово! Содержимое inventory.ini:
+    server: 
+    server: [vagrant_boxes]
+    server: 
+    server: server ansible_host=127.0.0.1 ansible_port=2222 ansible_private_key_file=/home/admin_insta11/vpn_lab/.vagrant/machines/server/virtualbox/private_key
+    server: 
+    server: [vagrant_boxes:vars]
+    server: ansible_user=vagrant
+    server: ansible_python_interpreter=/usr/bin/python3
+    server: host_key_checking=False
+    server: 
+    server: Running ansible-playbook...
+
+PLAY [Настройка OpenVPN-сервера ( туннель, PKI, сервис)] ***********************
+
+TASK [Gathering Facts] *********************************************************
+ok: [server]
+
+TASK [Обновить кэш apt] ********************************************************
+ok: [server]
+
+TASK [Установить пакеты] *******************************************************
+changed: [server]
+
+TASK [Перевести SELinux в permissive (lab)] ************************************
+ok: [server]
+
+TASK [SELinux permissive после перезагрузки] ***********************************
+ok: [server]
+
+TASK [Инициализация PKI] *******************************************************
+changed: [server]
+
+TASK [Сборка корневого CA] *****************************************************
+changed: [server]
+
+TASK [Запрос на подпись для сервера] *******************************************
+changed: [server]
+
+TASK [Подписание серверного сертификата CA] ************************************
+changed: [server]
+
+TASK [Параметры Диффи-Хеллмана] ************************************************
+changed: [server]
+
+TASK [Статический ключ OpenVPN (tls-auth/tls-crypt, не ключ CA!)] **************
+changed: [server]
+
+TASK [Запрос на подпись для клиента] *******************************************
+changed: [server]
+
+TASK [Подписание клиентского сертификата CA] ***********************************
+changed: [server]
+
+TASK [Создать каталог для ключей клиента] **************************************
+ok: [server]
+
+TASK [Раздать сертификаты и ключи в общую папку] *******************************
+changed: [server] => (item={'src': '/etc/openvpn/pki/ca.crt', 'dest': 'ca.crt'})
+changed: [server] => (item={'src': '/etc/openvpn/pki/issued/client.crt', 'dest': 'client.crt'})
+changed: [server] => (item={'src': '/etc/openvpn/pki/private/client.key', 'dest': 'client.key'})
+
+TASK [server.conf (без ручного push — его делает макрос server)] ***************
+changed: [server]
+
+TASK [Юнит openvpn@.service] ***************************************************
+changed: [server]
+
+TASK [Каталог для CCD] *********************************************************
+ok: [server]
+
+TASK [Запустить и включить openvpn@server] *************************************
+changed: [server]
+
+RUNNING HANDLER [Перезагрузить systemd] ****************************************
+ok: [server]
+
+PLAY RECAP *********************************************************************
+server                     : ok=20   changed=13   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[admin_insta11@mv334 vpn_lab]$
+[admin_insta11@mv334 vpn_lab]$ ll
+итого 24
+drwxrwxr-x 2 admin_insta11 admin_insta11 4096 ноя 22 16:39 ansible
+-rw-rw-r-- 1 admin_insta11 admin_insta11  195 ноя 22 17:08 client.conf
+-rwxrwxr-x 1 admin_insta11 admin_insta11 2696 ноя 22 16:24 generate_inventory.sh
+-rw-rw-r-- 1 admin_insta11 admin_insta11  277 ноя 22 16:51 inventory.ini
+-rw-rw-r-- 1 admin_insta11 admin_insta11  978 ноя 22 16:35 Vagrantfile
+drwxr-xr-x 3 admin_insta11 admin_insta11 4096 ноя 22 16:44 vpn_lab
+[admin_insta11@mv334 vpn_lab]$ 
+[admin_insta11@mv334 vpn_lab]$ ll vpn_lab/client/
+итого 16
+-rw------- 1 admin_insta11 admin_insta11 1184 ноя 22 16:52 ca.crt
+-rw------- 1 admin_insta11 admin_insta11 4467 ноя 22 16:55 client.crt
+-rw------- 1 admin_insta11 admin_insta11 1704 ноя 22 16:55 client.key
+[admin_insta11@mv334 vpn_lab]$ 
+```
+
+
+
 # КОНЕЦ
 
 
