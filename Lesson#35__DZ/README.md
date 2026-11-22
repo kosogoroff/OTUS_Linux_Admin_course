@@ -617,7 +617,9 @@ iperf Done.
 root@client:~# 
 ```
 
-### 2. Организация туннеля openvpn
+### 2. Организация RAS на базе OpenVPN
+
+Для создания Remote Access Server с авторизацией по ключам и проверки его работы выполняем следующие этапы.
 
 2.1 Установка и конфигурирование openvpn сервера на ВМ
 
@@ -669,7 +671,7 @@ root@server:/etc/openvpn# /usr/share/easy-rsa/easyrsa init-pki
 init-pki complete; you may now create a CA or requests.
 Your newly created PKI dir is: /etc/openvpn/pki
 
-root@server:/etc/openvpn# # Генерируем корневой сертификат
+root@server:/etc/openvpn# # Генерируем корневой самоподписанный сертификат
 root@server:/etc/openvpn#
 root@server:/etc/openvpn# echo 'rasvpn' | /usr/share/easy-rsa/easyrsa build-ca nopass
 Using SSL: openssl OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)
@@ -893,8 +895,6 @@ drwx------ 5 root root 4096 Nov 19 15:49 revoked/
 -rw------- 1 root root   33 Nov 19 15:53 serial.old
 root@server:/etc/openvpn# 
 root@server:/etc/openvpn# cp /etc/openvpn/pki/ca.crt /home/vagrant/
-root@server:/etc/openvpn# cp /etc/openvpn/pki/client.crt /home/vagrant/
-cp: cannot stat '/etc/openvpn/pki/client.crt': No such file or directory
 root@server:/etc/openvpn# cp /etc/openvpn/pki/issued/client.crt /home/vagrant/
 root@server:/etc/openvpn# cp /etc/openvpn/pki/private/client.key /home/vagrant/
 root@server:/etc/openvpn# 
@@ -970,7 +970,6 @@ remote-cert-tls server
 ca ./ca.crt 
 cert ./client.crt 
 key ./client.key 
-#route 10.10.10.0 255.255.255.0 
 persist-key 
 persist-tun 
 comp-lzo 
@@ -980,7 +979,80 @@ verb 3
 
 ## 2.3 Проверка работы туннеля openvpn
 
-Запускаем туннель openvpn на клиенте:
+**ПРИМЕЧАНИЕ:** ниже приведены результаты проверки работы туннеля уже с модифицированными настройками сервера openvpn и клиента openvpn. В процессе отладки были внесены следующие модификации в настройки сервера RAS, препятствующие прохождению трафика:
+
+1. в файле конфигурации client.conf в методичке ошибочно указан маршрут на внешнюю сеть 'route 192.168.56.0 255.255.255.0' вместо внутренней тунельной. Исходный файл client.conf из методички:
+
+```
+dev tun 
+proto udp 
+remote 192.168.56.10 1207 
+client 
+resolv-retry infinite 
+remote-cert-tls server 
+ca ./ca.crt 
+cert ./client.crt 
+key ./client.key 
+route 192.168.56.0 255.255.255.0 
+persist-key 
+persist-tun 
+comp-lzo 
+verb 3
+```
+
+Из-за наличия этого маршрута в конфигурации клиента после установки туннеля с клиента маршрут на внешнюю сеть 192.168.56.0/24 направлялся внутрь созданного туннеля - в результате с клиента/хоста переставал пинговаться IP-адрес 192.168.56.10 сервера RAS. 
+По итогам отладки строка 'route 192.168.56.0 255.255.255.0' из файла конфигурации клиента удалена, исправленный файл приведён ниже:
+
+```
+[admin_insta11@mv334 vpn_lab]$ cat client.conf 
+dev tun 
+proto udp 
+remote 192.168.56.10 1207 
+client 
+resolv-retry infinite 
+remote-cert-tls server 
+ca ./ca.crt 
+cert ./client.crt 
+key ./client.key 
+persist-key 
+persist-tun 
+comp-lzo 
+verb 3
+[admin_insta11@mv334 vpn_lab]$
+```
+
+2. В конфигурации сервера в методичке присутствовал CCD файл /etc/openvpn/client/client
+с директивой 'iroute 10.10.10.0 255.255.255.0' назначения внутренней сети для клиента:
+
+```
+# Зададим параметр iroute для клиента
+echo 'iroute 10.10.10.0 255.255.255.0' > /etc/openvpn/client/client
+```
+
+Так как в качестве внутренней сети для клиента была назначена туннельная сеть между сервером и клиентом,
+то сервер RAS в результате этого конфликта отменял анонс/пуш этой сети на клиент (REMOVE PUSH ROUTE ...):
+
+```
+<...>
+2026-11-20 15:12:37 MULTI_sva: pool returned IPv4=10.10.10.6, IPv6=(Not enabled)
+2026-11-20 15:12:37 OPTIONS IMPORT: reading client specific options from: /etc/openvpn/client/client
+2026-11-20 15:12:37 MULTI: Learn: 10.10.10.6 -> client/192.168.56.1:39800
+2026-11-20 15:12:37 MULTI: primary virtual IP for client/192.168.56.1:39800: 10.10.10.6
+2026-11-20 15:12:37 MULTI: internal route 10.10.10.0/24 -> client/192.168.56.1:39800
+2026-11-20 15:12:37 MULTI: Learn: 10.10.10.0/24 -> client/192.168.56.1:39800
+2026-11-20 15:12:37 REMOVE PUSH ROUTE: 'route 10.10.10.0 255.255.255.0'
+<...>
+```
+
+В результате на клиенте после установления туннеля отсутствовал маршрут в туннельную сеть 10.10.10.0/24 и ответы
+на запросы ping уходили в сторону маршрута по умолчанию (интерфейс eth0), а не в сторону туннеля (интерфейс tun0).
+
+Для устранения проблемы файл /etc/openvpn/client/client был удалён, а сервер openvpn перезапущен.
+
+После выполнения двух описанных проблем трафик через установленный туннел начал проходить нормально.
+
+
+Для проверки запускаем туннель openvpn на клиенте:
 
 ```
 admin_insta11@mv334 vpn_lab]$ sudo openvpn --config client.conf
@@ -1048,6 +1120,143 @@ root@server:/home/vagrant# tail -50 /var/log/openvpn.log
 2026-11-22 05:47:00 client/192.168.56.1:53170 Outgoing Data Channel: Cipher 'AES-256-GCM' initialized with 256 bit key
 2026-11-22 05:47:00 client/192.168.56.1:53170 Incoming Data Channel: Cipher 'AES-256-GCM' initialized with 256 bit key
 2026-11-22 05:47:00 client/192.168.56.1:53170 SENT CONTROL [client]: 'PUSH_REPLY,route 10.10.10.0 255.255.255.0,route 10.10.10.0 255.255.255.0,topology net30,ping 10,ping-restart 120,ifconfig 10.10.10.6 10.10.10.5,peer-id 0,cipher AES-256-GCM' (status=1)
+```
+
+После установки туннеля проверяем состояние интерфейсов, таблицу маршрутов и связность через туннель:
+
+1) на сервере/ВМ :
+
+```
+root@server:/home/vagrant# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 08:00:27:16:dd:ef brd ff:ff:ff:ff:ff:ff
+    altname enp0s3
+    inet 10.0.2.15/24 metric 100 brd 10.0.2.255 scope global dynamic eth0
+       valid_lft 57293sec preferred_lft 57293sec
+    inet6 fd17:625c:f037:2:a00:27ff:fe16:ddef/64 scope global dynamic mngtmpaddr noprefixroute 
+       valid_lft 86357sec preferred_lft 14357sec
+    inet6 fe80::a00:27ff:fe16:ddef/64 scope link 
+       valid_lft forever preferred_lft forever
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 08:00:27:d7:27:f9 brd ff:ff:ff:ff:ff:ff
+    altname enp0s8
+    inet 192.168.56.10/24 brd 192.168.56.255 scope global eth1
+       valid_lft forever preferred_lft forever
+    inet6 fe80::a00:27ff:fed7:27f9/64 scope link 
+       valid_lft forever preferred_lft forever
+11: tun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN group default qlen 500
+    link/none 
+    inet 10.10.10.1 peer 10.10.10.2/32 scope global tun0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::a26f:48fa:8080:a5cd/64 scope link stable-privacy 
+       valid_lft forever preferred_lft forever
+root@server:/home/vagrant# 
+root@server:/home/vagrant# ip r
+default via 10.0.2.2 dev eth0 proto dhcp src 10.0.2.15 metric 100 
+10.0.2.0/24 dev eth0 proto kernel scope link src 10.0.2.15 metric 100 
+10.0.2.2 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.0.2.3 dev eth0 proto dhcp scope link src 10.0.2.15 metric 100 
+10.10.10.0/24 via 10.10.10.2 dev tun0 
+10.10.10.2 dev tun0 proto kernel scope link src 10.10.10.1 
+192.168.56.0/24 dev eth1 proto kernel scope link src 192.168.56.10 
+root@server:/home/vagrant# 
+root@server:/home/vagrant# ping 10.10.10.6
+PING 10.10.10.6 (10.10.10.6) 56(84) bytes of data.
+64 bytes from 10.10.10.6: icmp_seq=1 ttl=64 time=0.957 ms
+64 bytes from 10.10.10.6: icmp_seq=2 ttl=64 time=1.11 ms
+64 bytes from 10.10.10.6: icmp_seq=3 ttl=64 time=1.07 ms
+64 bytes from 10.10.10.6: icmp_seq=4 ttl=64 time=1.16 ms
+^C
+--- 10.10.10.6 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+rtt min/avg/max/mdev = 0.957/1.072/1.155/0.073 ms
+root@server:/home/vagrant#
+root@server:/home/vagrant# traceroute 10.10.10.6
+traceroute to 10.10.10.6 (10.10.10.6), 30 hops max, 60 byte packets
+ 1  10.10.10.6 (10.10.10.6)  1.295 ms  1.043 ms  2.681 ms
+root@server:/home/vagrant#
+```
+
+2) на клиенте/хосте:
+
+```
+[admin_insta11@mv334 vpn_lab]$ ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    link/ether a0:36:9f:52:7b:92 brd ff:ff:ff:ff:ff:ff
+    altname enp8s0f0
+    inet 172.17.15.74/24 brd 172.17.15.255 scope global noprefixroute eth0
+       valid_lft forever preferred_lft forever
+3: eth1: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc mq state DOWN group default qlen 1000
+    link/ether a0:36:9f:52:7b:93 brd ff:ff:ff:ff:ff:ff
+    altname enp8s0f1
+4: virbr0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default qlen 1000
+    link/ether 52:54:00:01:14:e6 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.122.1/24 brd 192.168.122.255 scope global virbr0
+       valid_lft forever preferred_lft forever
+5: vboxnet0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 0a:00:27:00:00:00 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.0.1/24 brd 10.0.0.255 scope global vboxnet0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::800:27ff:fe00:0/64 scope link 
+       valid_lft forever preferred_lft forever
+6: vboxnet1: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc fq_codel state DOWN group default qlen 1000
+    link/ether 0a:00:27:00:00:01 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.50.1/24 brd 192.168.50.255 scope global vboxnet1
+       valid_lft forever preferred_lft forever
+    inet6 fe80::800:27ff:fe00:1/64 scope link 
+       valid_lft forever preferred_lft forever
+7: vboxnet2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 0a:00:27:00:00:02 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.56.1/24 brd 192.168.56.255 scope global vboxnet2
+       valid_lft forever preferred_lft forever
+    inet6 fe80::800:27ff:fe00:2/64 scope link 
+       valid_lft forever preferred_lft forever
+19: tun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN group default qlen 500
+    link/none 
+    inet 10.10.10.6 peer 10.10.10.5/32 scope global tun0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::d6ee:3778:e87:47c8/64 scope link stable-privacy 
+       valid_lft forever preferred_lft forever
+[admin_insta11@mv334 vpn_lab]$ 
+[admin_insta11@mv334 vpn_lab]$ ip r
+default via 172.17.15.1 dev eth0 proto static metric 100 
+10.0.0.0/24 dev vboxnet0 proto kernel scope link src 10.0.0.1 
+10.10.10.0/24 via 10.10.10.5 dev tun0 
+10.10.10.5 dev tun0 proto kernel scope link src 10.10.10.6 
+172.17.15.0/24 dev eth0 proto kernel scope link src 172.17.15.74 metric 100 
+192.168.50.0/24 dev vboxnet1 proto kernel scope link src 192.168.50.1 linkdown 
+192.168.56.0/24 dev vboxnet2 proto kernel scope link src 192.168.56.1 
+192.168.122.0/24 dev virbr0 proto kernel scope link src 192.168.122.1 linkdown 
+[admin_insta11@mv334 vpn_lab]$ 
+[admin_insta11@mv334 vpn_lab]$ 
+[admin_insta11@mv334 vpn_lab]$ ping 10.10.10.1
+PING 10.10.10.1 (10.10.10.1) 56(84) bytes of data.
+64 bytes from 10.10.10.1: icmp_seq=1 ttl=64 time=1.35 ms
+64 bytes from 10.10.10.1: icmp_seq=2 ttl=64 time=1.17 ms
+64 bytes from 10.10.10.1: icmp_seq=3 ttl=64 time=1.17 ms
+64 bytes from 10.10.10.1: icmp_seq=4 ttl=64 time=1.22 ms
+^C
+--- 10.10.10.1 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3004ms
+rtt min/avg/max/mdev = 1.166/1.225/1.348/0.073 ms
+[admin_insta11@mv334 vpn_lab]$ 
+[admin_insta11@mv334 vpn_lab]$ 
+[admin_insta11@mv334 vpn_lab]$ traceroute 10.10.10.1
+traceroute to 10.10.10.1 (10.10.10.1), 30 hops max, 60 byte packets
+ 1  10.10.10.1 (10.10.10.1)  2.420 ms  2.404 ms  2.417 ms
+[admin_insta11@mv334 vpn_lab]$ 
 ```
 
 
