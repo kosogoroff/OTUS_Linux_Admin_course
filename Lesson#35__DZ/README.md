@@ -619,6 +619,246 @@ root@client:~#
 
 ### 2. Организация туннеля openvpn
 
+2.1 Установка и конфигурирование openvpn сервера на ВМ
+
+2.1.1 Установка пакетов
+
+Установка необходимых пакетов на ВМ1, отключение SELinux:
+
+```
+[admin_insta11@mv334 vpn_lab]$ vagrant ssh server
+Welcome to Ubuntu 22.04.5 LTS (GNU/Linux 5.15.0-160-generic x86_64)
+
+Use of this system is acceptance of the OS vendor EULA and License Agreements.
+vagrant@server:~$ 
+vagrant@server:~$ sudo -i
+root@server:~# 
+root@server:~# apt update
+Get:1 http://security.ubuntu.com/ubuntu jammy-security InRelease [129 kB]
+Get:2 http://security.ubuntu.com/ubuntu jammy-security/main amd64 Packages [3,718 kB]
+<...>
+root@server:~# 
+root@server:~# apt install openvpn iperf3 selinux-utils
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libiperf0 libpkcs11-helper1 libsctp1
+Suggested packages:
+  lksctp-tools resolvconf openvpn-systemd-resolved easy-rsa
+The following NEW packages will be installed:
+  iperf3 libiperf0 libpkcs11-helper1 libsctp1 openvpn selinux-utils
+0 upgraded, 6 newly installed, 0 to remove and 201 not upgraded.
+Need to get 883 kB of archives.
+After this operation, 2,781 kB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+<...>
+root@server:~# setenforce 0
+setenforce: SELinux is disabled
+root@server:~# 
+```
+
+2.1.2 Генерация ключей на сервере
+
+```
+root@server:~# 
+root@server:~# cd /etc/openvpn
+root@server:/etc/openvpn#
+root@server:/etc/openvpn# /usr/share/easy-rsa/easyrsa init-pki
+
+init-pki complete; you may now create a CA or requests.
+Your newly created PKI dir is: /etc/openvpn/pki
+
+root@server:/etc/openvpn#
+root@server:/etc/openvpn# echo 'rasvpn' | /usr/share/easy-rsa/easyrsa build-ca nopass
+Using SSL: openssl OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Common Name (eg: your user, host, or server name) [Easy-RSA CA]:
+CA creation complete and you may now import and sign cert requests.
+Your new CA certificate file for publishing is at:
+/etc/openvpn/pki/ca.crt
+
+root@server:/etc/openvpn# 
+root@server:/etc/openvpn# echo 'rasvpn' | /usr/share/easy-rsa/easyrsa gen-req server nopass
+Using SSL: openssl OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)
+.+....+...+...........+.+......+..............+.+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.+...+......+.+...........+....+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.............+...+.........+..............+..........+.........+...+........+....+..+.........+....+...+...+.........+....................+.+..+...+.+.......................+......+.+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+.....+..+...+............+.+.....+.........+.+..+.......+...+......+............+..+.+.....+..........+......+......+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*............+..........+..+....+..+...+...................+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*....+......+..+.+......+......+..+......+....+.................+......+.........+...+.......+...+...+..+......+..........+.....+......+.+........+....+...+..+..........+...........+.......+.....+.........+...+.+..+....+.......................................+..+.........+.............+...........+...................+..+....+.........+...+..+.+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-----
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Common Name (eg: your user, host, or server name) [server]:
+Keypair and certificate request completed. Your files are:
+req: /etc/openvpn/pki/reqs/server.req
+key: /etc/openvpn/pki/private/server.key
+
+root@server:/etc/openvpn#
+oot@server:/etc/openvpn# echo 'yes' | /usr/share/easy-rsa/easyrsa sign-req server server
+Using SSL: openssl OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)
+
+You are about to sign the following certificate.
+Please check over the details shown below for accuracy. Note that this request
+has not been cryptographically verified. Please be sure it came from a trusted
+source or that you have verified the request checksum with the sender.
+
+Request subject, to be signed as a server certificate for 825 days:
+
+subject=
+    commonName                = rasvpn
+
+Type the word 'yes' to continue, or any other input to abort.
+  Confirm request details: Using configuration from /etc/openvpn/pki/easy-rsa-3576.VD7yQj/tmp.UbW7YM
+40D7D29FA87F0000:error:0700006C:configuration file routines:NCONF_get_string:no value:../crypto/conf/conf_lib.c:315:group=<NULL> name=unique_subject
+Check that the request matches the signature
+Signature ok
+The Subject's Distinguished Name is as follows
+commonName            :ASN.1 12:'rasvpn'
+Certificate is to be certified until Feb 21 15:49:29 2029 GMT (825 days)
+
+Write out database with 1 new entries
+Data Base Updated
+
+Certificate created at: /etc/openvpn/pki/issued/server.crt
+
+root@server:/etc/openvpn# 
+root@server:/etc/openvpn# /usr/share/easy-rsa/easyrsa gen-dh
+Using SSL: openssl OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)
+Generating DH parameters, 2048 bit long safe prime
+...................++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*++*
+
+DH parameters of size 2048 created at /etc/openvpn/pki/dh.pem
+
+root@server:/etc/openvpn# 
+root@server:/etc/openvpn# openvpn --genkey secret ca.key
+root@server:/etc/openvpn# 
+root@server:/etc/openvpn# echo 'client' | /usr/share/easy-rsa/easyrsa gen-req client nopass
+Using SSL: openssl OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)
+....+..+..........+..+......+...+.........+...+.......+......+......+...........+...+.+.....+.+..+.......+........+.+..+...+....+.....+.......+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-----
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Common Name (eg: your user, host, or server name) [client]:
+Keypair and certificate request completed. Your files are:
+req: /etc/openvpn/pki/reqs/client.req
+key: /etc/openvpn/pki/private/client.key
+
+root@server:/etc/openvpn# 
+root@server:/etc/openvpn# echo 'yes' | /usr/share/easy-rsa/easyrsa sign-req client client
+Using SSL: openssl OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)
+
+You are about to sign the following certificate.
+Please check over the details shown below for accuracy. Note that this request
+has not been cryptographically verified. Please be sure it came from a trusted
+source or that you have verified the request checksum with the sender.
+
+Request subject, to be signed as a client certificate for 825 days:
+
+subject=
+    commonName                = client
+
+Type the word 'yes' to continue, or any other input to abort.
+  Confirm request details: Using configuration from /etc/openvpn/pki/easy-rsa-3674.rnet81/tmp.NTlgqs
+Check that the request matches the signature
+Signature ok
+The Subject's Distinguished Name is as follows
+commonName            :ASN.1 12:'client'
+Certificate is to be certified until Feb 21 15:53:00 2029 GMT (825 days)
+
+Write out database with 1 new entries
+Data Base Updated
+
+Certificate created at: /etc/openvpn/pki/issued/client.crt
+
+root@server:/etc/openvpn# 
+```
+
+2.1.3 Создаём файл конфигурации сервера openvpn
+
+```
+root@server:/etc/openvpn# vim /etc/openvpn/server.conf
+root@server:/etc/openvpn#
+root@server:/home/vagrant# cat /etc/openvpn/server.conf
+port 1207 
+proto udp 
+dev tun 
+ca /etc/openvpn/pki/ca.crt 
+cert /etc/openvpn/pki/issued/server.crt 
+key /etc/openvpn/pki/private/server.key 
+dh /etc/openvpn/pki/dh.pem 
+server 10.10.10.0 255.255.255.0 
+ifconfig-pool-persist ipp.txt 
+client-to-client 
+client-config-dir /etc/openvpn/client 
+keepalive 10 120 
+comp-lzo 
+persist-key 
+persist-tun 
+status /var/log/openvpn-status.log 
+log /var/log/openvpn.log 
+verb 3
+root@server:/home/vagrant#
+```
+
+2.1.4 Создаём и запускаем сервис openvpn
+
+```
+root@server:~# vi /etc/systemd/system/openvpn@.service
+root@server:~#
+root@server:~# cat /etc/systemd/system/openvpn@.service
+[Unit] 
+Description=OpenVPN Tunneling Application On %I 
+After=network.target 
+[Service] 
+Type=notify 
+PrivateTmp=true 
+ExecStart=/usr/sbin/openvpn --cd /etc/openvpn/ --config %i.conf 
+[Install] 
+WantedBy=multi-user.target
+root@server:~#
+root@server:~# systemctl start openvpn@server
+root@server:~# 
+root@server:~# systemctl enable openvpn@server
+Created symlink /etc/systemd/system/multi-user.target.wants/openvpn@server.service → /etc/systemd/system/openvpn@.service.
+root@server:~# 
+root@server:~# systemctl status openvpn@server
+● openvpn@server.service - OpenVPN Tunneling Application On server
+     Loaded: loaded (/etc/systemd/system/openvpn@.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2026-11-18 15:39:02 UTC; 20s ago
+   Main PID: 2266 (openvpn)
+     Status: "Pre-connection initialization successful"
+      Tasks: 1 (limit: 3425)
+     Memory: 1.6M
+        CPU: 25ms
+     CGroup: /system.slice/system-openvpn.slice/openvpn@server.service
+             └─2266 /usr/sbin/openvpn --cd /etc/openvpn/ --config server.conf
+
+Nov 18 15:39:02 server systemd[1]: Starting OpenVPN Tunneling Application On server...
+Nov 18 15:39:02 server openvpn[2266]: 2026-11-18 15:39:02 WARNING: Compression for receiving enabled. Compression has been used in the past to break encryption. Sent packets are not compres>
+Nov 18 15:39:02 server systemd[1]: Started OpenVPN Tunneling Application On server.
+root@server:~#
+```
+
+2.2 Конфигурируем openvpn client на хосте
+
+```
+
+```
+
 
 # КОНЕЦ
 
@@ -652,12 +892,127 @@ CCD = Client Configuration Directory. Это каталог (у вас /etc/open
 
 1.4 Кстати, случай в методичке с iroute в CCD файле — образцовая иллюстрация того, почему iroute и route путают: звучат почти одинаково, а работают в противоположных направлениях. 
 
+В методичке настроен client-config-dir /etc/openvpn/client, и файл /etc/openvpn/client/client (CCD-файл по имени сертификата клиента) содержит для этого клиента директиву iroute 10.10.10.0 255.255.255.0 — это видно по строке MULTI: internal route ... -> client. 
+
+```
+2026-11-20 15:12:37 192.168.56.1:39800 TLS: Initial packet from [AF_INET]192.168.56.1:39800, sid=4bee08c5 b7eb12a7
+2026-11-20 15:12:37 192.168.56.1:39800 VERIFY OK: depth=1, CN=rasvpn
+2026-11-20 15:12:37 192.168.56.1:39800 VERIFY OK: depth=0, CN=client
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_VER=2.6.11
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_PLAT=linux
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_TCPNL=1
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_MTU=1600
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_NCP=2
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_CIPHERS=AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_PROTO=990
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_LZ4=1
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_LZ4v2=1
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_LZO=1
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_COMP_STUB=1
+2026-11-20 15:12:37 192.168.56.1:39800 peer info: IV_COMP_STUBv2=1
+2026-11-20 15:12:37 192.168.56.1:39800 Control Channel: TLSv1.3, cipher TLSv1.3 TLS_AES_256_GCM_SHA384, peer certificate: 2048 bit RSA, signature: RSA-SHA256
+2026-11-20 15:12:37 192.168.56.1:39800 [client] Peer Connection Initiated with [AF_INET]192.168.56.1:39800
+2026-11-20 15:12:37 MULTI: new connection by client 'client' will cause previous active sessions by this client to be dropped.  Remember to use the --duplicate-cn option if you want multiple clients using the same certificate or username to concurrently connect.
+2026-11-20 15:12:37 MULTI_sva: pool returned IPv4=10.10.10.6, IPv6=(Not enabled)
+2026-11-20 15:12:37 OPTIONS IMPORT: reading client specific options from: /etc/openvpn/client/client
+2026-11-20 15:12:37 MULTI: Learn: 10.10.10.6 -> client/192.168.56.1:39800
+2026-11-20 15:12:37 MULTI: primary virtual IP for client/192.168.56.1:39800: 10.10.10.6
+2026-11-20 15:12:37 MULTI: internal route 10.10.10.0/24 -> client/192.168.56.1:39800
+2026-11-20 15:12:37 MULTI: Learn: 10.10.10.0/24 -> client/192.168.56.1:39800
+2026-11-20 15:12:37 REMOVE PUSH ROUTE: 'route 10.10.10.0 255.255.255.0'
+2026-11-20 15:12:37 Data Channel: using negotiated cipher 'AES-256-GCM'
+2026-11-20 15:12:37 Outgoing Data Channel: Cipher 'AES-256-GCM' initialized with 256 bit key
+2026-11-20 15:12:37 Incoming Data Channel: Cipher 'AES-256-GCM' initialized with 256 bit key
+2026-11-20 15:12:37 SENT CONTROL [client]: 'PUSH_REPLY,topology net30,ping 10,ping-restart 120,ifconfig 10.10.10.6 10.10.10.5,peer-id 1,cipher AES-256-GCM' (status=1)
+```
+
+А дальше сработало правило из документации: **OpenVPN не пушит клиенту маршрут в сеть, которая уже закреплена за этим же клиентом через iroute** — ведь это «собственная» подсеть клиента, и маршрут до неё ему не нужен. Вот эта процедура вычёркивания и логируется как REMOVE PUSH ROUTE. Обратите внимание: в PUSH_REPLY маршрута действительно нет — только ifconfig, ping и cipher. Поэтому сервер не стал пушить этот маршрут клиенту — точнее было бы сказать: «сервер пушил, но сам же вычеркнул».
+
+Из-за этого на клиенте после установления туннеля в таблице маршрутизации отсутствовал маршрут 10.10.10.0/24 via 10.10.10.5 dev tun0 , 
+и поэтому пинги с сервера приходили на клиент из интерфейса tun0, но ответы клиента уходили в сторону маршрута по умолчанию.
+
+Это можно исправить следующими способами:
+
+1) На клиенте:
+
+Добавить в файл конфигурации client.conf строку
+
+```
+route 10.10.10.0 255.255.255.0
+```
+
+Данная строка просто объявляет на клиенте нужный маршрут в сторону туннеля.
+
+2) Как сделать, чтобы нужный маршрут пушил сам сервер:
+
+2.1) Удалить из CCD-файла /etc/openvpn/client/client директиву iroute 10.10.10.0 255.255.255.0 (и push той же сети, если он там есть): iroute нужен для сетей, находящихся за клиентом, а не для самой туннельной сети — здесь он был лишним.
+
+и добавить в server.conf:
+
+```
+push "route 10.10.10.0 255.255.255.0"
+```
+
+Заодно это правильная архитектура: маршрутизацией управляет сервер, а конфиг клиента остаётся минимальным — сервера рассылают маршруты, а не клиенты прописывают их вручную. 
+
+**Примечание:** оказалось, что при добавлении в данном варианте дополнительной директивы push "route 10.10.10.0 255.255.255.0" маршрут стал пушиться на клиент дважды - эти видно в логах клиента при подключении:
+
+```
+<...>
+2026-11-22 08:28:43 net_addr_ptp_v4_add: 10.10.10.6 peer 10.10.10.5 dev tun0
+2026-11-22 08:28:43 net_route_v4_add: 10.10.10.0/24 via 10.10.10.5 dev [NULL] table 0 metric -1
+2026-11-22 08:28:43 net_route_v4_add: 10.10.10.0/24 via 10.10.10.5 dev [NULL] table 0 metric -1
+2026-11-22 08:28:43 sitnl_send: rtnl: generic error (-17): File exists
+2026-11-22 08:28:43 NOTE: Linux route add command failed because route exists
+2026-11-22 08:28:43 Initialization Sequence Completed
+```
+
+Это происходит оттого, что в файле server,conf сервера openvpn уже есть директива server 10.10.10.0 255.255.255.0  ， которая является helper-маркосом и при имеющейся конфигурации (по умолчанию dev tun, topology net30) макрос эквивалентен примерно этому:
+
+```
+mode server                          # режим мультипользовательского сервера
+tls-server                           # серверная сторона TLS-рукопожатия
+ifconfig 10.10.10.1 10.10.10.2   # адрес сервера и его фантомный пир
+ifconfig-pool 10.10.10.4 10.10.10.251 255.255.255.0   # пул адресов для клиентов
+route 10.10.10.0 255.255.255.0       # системный маршрут на сервере (через tun0)
+push "route 10.10.10.0 255.255.255.0"   # ← вот ваш автоматический push
+```
+
+Отсюда и раскладка адресов, которую мы разбирали по .5/.6: первый блок /30 (.0–.3) — серверу (.1 и .2), следующие блоки раздаются клиентам из пула (.4–.7 → .5 и .6 первому клиенту, .8–.11 → второму и так далее). Пул заканчивается на .251 — OpenVPN резервирует хвост подсети на служебные нужды.
+
+
+##### Сводка по механике пушей в итоговом конфиге
+
+    push маршрута в туннельную сеть — делает макрос server автоматически (единственный источник, ручных пушей не осталось);
+    REMOVE PUSH ROUTE в старых логах — это OpenVPN вычёркивал именно этот автоматический пуш из-за конфликта с iroute;
+    маршруты в сети за клиентами — по-прежнему только вручную: push "route X" в конфиге/CCD + route + iroute.
+
+То есть правило простое: всё, что касается туннельной подсети — забота макроса server (отдельный push маршрута туннельной подсети добавлять не нужно); всё, что дальше неё — ручная настройка.
+
+##### Полезное следствие
+
+Раз server делает push сам, в server.conf теперь ничего вручную пушить не нужно — конфиг можно было бы даже упростить. А если вы когда-нибудь перейдёте на topology subnet (см. далее), макрос сам изменит развёртку: ifconfig 10.10.10.1 255.255.255.0 и пул .2–.254 — без фантомных пиров и с нормальной маской у клиентов.
+
+Есть и «брат» макроса для данных поверх TLS — server-bridge (режим bridge/TAP), который разворачивается в набор директив для L2-моста. В вашей лабе не нужен, но на защите спросят про отличие tun от tap — там как раз упомянуть.
+
+
+2.2) Вариант ещё чище: topology subnet
+
+Если хотите вообще без ручных маршрутов и без push, добавьте в server.conf:
+
+```
+topology subnet
+```
+
+В этой топологии клиент получает не точечный /30-пир (как у вас сейчас: 10.10.10.6 peer 10.10.10.5), а адрес с маской всей подсети — и маршрут 10.10.10.0/24 dev tun0 ядро устанавливает само, как для обычного Ethernet-интерфейса. Это современный рекомендуемый режим, и в нём ваша проблема «маршрут до 10.10.10.1» исчезает в принципе.
+
+
+
+### Два этапа маршрутизации, две таблицы
 
 route — системная таблица ядра, iroute — внутренняя таблица OpenVPN, которая решает, какому клиенту переслать пакет.
 
 Разница в том, что эти две таблицы решают две разные задачи на двух разных этапах пути пакета.
-
-### Два этапа, две таблицы
 
 Представьте, что туннель — это как локальная сеть: у сервера один интерфейс tun0, а за ним несколько клиентов. Пакет, летящий в сторону «сети за клиентом», проходит два этапа:
 
@@ -766,3 +1121,40 @@ OpenVPN по сигналу USR2 вывалит в лог текущие CLIENT 
 
 Для лабы красивая связка: показать ROUTING_TABLE из status-файла рядом со строками MULTI: internal route из лога и объяснить в выводах, что первая — выученные адреса, вторая — статические iroute из CCD. Демонстрирует понимание обоих уровней внутренней маршрутизации OpenVPN.
 
+
+
+## 2. Генерация сертификатов на сервере с помощью easy-rsa
+
+
+Всё идёт по плану, но есть нюанс: перед подписью серверного сертификата в вашей PKI должен уже существовать CA — а судя по выводу, вы его ещё не создавали. Без него sign-req упадёт с ошибкой «missing CA key» или попросит несуществующий ключ. Плюс трюк с echo 'yes' сработает только для подтверждения (Type the word 'yes' to continue), но не для ввода пароля CA — поэтому на лабе удобнее делать CA без пароля.
+
+Полная последовательность генерации сертификатов для сервера выглядит так:
+
+```
+# 1. Создаём CA (один раз)
+/usr/share/easy-rsa/easyrsa build-ca nopass
+
+# 2. Запрос + ключ сервера
+echo 'rasvpn' | /usr/share/easy-rsa/easyrsa gen-req server nopass
+
+# 3. Подписываем сертификат сервера
+echo 'yes' | /usr/share/easy-rsa/easyrsa sign-req server server
+
+# 4. Параметры Диффи-Хеллмана
+/usr/share/easy-rsa/easyrsa gen-dh
+
+# 5. Список отзыва сертификатов (нужен для server.conf: crl-verify)
+/usr/share/easy-rsa/easyrsa gen-crl
+```
+
+Пара деталей, которые обычно всплывают на этом этапе:
+
+- Common Name. На запрос «Common Name [server]:» можно просто нажать Enter — имя уже подставлено из аргумента команды. Если вводите что-то своё, оно не должно совпадать с именем клиента.
+
+- nopass. У серверного ключа пароль стоять не должен — иначе OpenVPN при перезапуске будет ожидать его ввода вручную, что удобно не очень.
+
+- После sign-req сертификат ляжет в /etc/openvpn/pki/issued/server.crt, а ключ уже есть в /etc/openvpn/pki/private/server.key — именно эти пути пойдёт в server.conf (строки cert и key).
+
+Дальше по классике: генерируете клиентские сертификаты той же парой gen-req + sign-req client client1, копируете файлы, пишете server.conf с port 1194, proto udp, dev tun, указываете пути к ca.crt, server.crt, server.key, dh.pem, crl.pem, добавляете tls-crypt (или ta.key при tls-auth), включаете net.ipv4.ip_forward=1 и NAT в iptables/firewall.
+
+Кстати, ваш init-pki создал директорию /etc/openvpn/pki — а в стандартном гайде она обычно находится там же, где выполняются команды easy-rsa. Убедитесь, что все команды запускаете из одного каталога, чтобы easy-rsa не пересоздал PKI в другом месте.
