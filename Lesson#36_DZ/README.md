@@ -1,2 +1,197 @@
 # Занятие 16.11.2026 "36.  DNS - настройка и обслуживание"
 
+Настраиваем split-dns
+
+## Цель:
+
+- Создать домашнюю сетевую лабораторию;
+
+- Изучить основы DNS;
+
+- Научиться работать с технологией Split-DNS в Linux-based системах.
+
+### Описание/Пошаговая инструкция выполнения домашнего задания:
+
+Для выполнения домашнего задания используйте методичку
+
+### Что нужно сделать?
+
+1. взять стенд https://github.com/erlong15/vagrant-bind
+
+- добавить еще один сервер client2
+
+- завести в зоне dns.lab имена:
+
+    - web1 - смотрит на клиент1
+
+    - web2 смотрит на клиент2
+
+- завести еще одну зону newdns.lab
+
+- завести в ней запись
+
+    - www - смотрит на обоих клиентов
+
+2. настроить split-dns
+
+- клиент1 - видит обе зоны, но в зоне dns.lab только web1
+
+- клиент2 видит только dns.lab
+
+Дополнительное задание:
+
+- настроить все без выключения selinux*
+
+Формат сдачи ДЗ - vagrant + ansible
+
+# Решение
+
+### 0. Создание и конфигурирование ВМ ns01, ns02, client, client2 - vagrant + ansible
+
+Общая структура скачаного  лабораторного репозитория приведена ниже:
+
+```
+[admin_insta11@mv334 vagrant-bind]$ tree
+.
+├── provisioning
+│   ├── client-motd
+│   ├── client-resolv.conf
+│   ├── master-named.conf
+│   ├── named.ddns.lab
+│   ├── named.dns.lab
+│   ├── named.dns.lab.rev
+│   ├── named.zonetransfer.key
+│   ├── playbook.yml
+│   ├── rndc.conf
+│   ├── servers-resolv.conf
+│   ├── slave-named.conf
+│   └── zonetransfer.key
+├── README.md
+└── Vagrantfile
+
+1 directory, 14 files
+```
+
+Vagrantfile для создания и конфигурирования четырёх ВМ приведён ниже:
+
+```
+[admin_insta11@mv334 vagrant-bind]$ cat Vagrantfile 
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+BOX_NAME = ENV['VAGRANT_BOX'] || 'centos/7'
+
+Vagrant.configure(2) do |config|
+  config.vm.box = BOX_NAME
+
+  config.vm.provision "ansible" do |ansible|
+    ansible.verbose = "vvv"
+    ansible.playbook = "provisioning/playbook.yml"
+    ansible.become = "true"
+  end
+
+
+  config.vm.provider "virtualbox" do |v|
+	  v.memory = 1024
+  end
+
+  config.vm.define "ns01" do |ns01|
+    ns01.vm.network "private_network", ip: "192.168.50.10", virtualbox__intnet: "dns"
+    ns01.vm.hostname = "ns01"
+  end
+
+  config.vm.define "ns02" do |ns02|
+    ns02.vm.network "private_network", ip: "192.168.50.11", virtualbox__intnet: "dns"
+    ns02.vm.hostname = "ns02"
+  end
+
+  config.vm.define "client" do |client|
+    client.vm.network "private_network", ip: "192.168.50.15", virtualbox__intnet: "dns"
+    client.vm.hostname = "client"
+  end
+
+  config.vm.define "client2" do |client2|
+    client2.vm.network "private_network", ip: "192.168.50.16", virtualbox__intnet: "dns"
+    client2.vm.hostname = "client2"
+  end
+
+end
+```
+
+Файл ansible playbook для провизионинга созданных ВМ приведён ниже:
+
+```
+[admin_insta11@mv334 vagrant-bind]$ cat provisioning/playbook.yml
+---
+- hosts: all
+  become: yes
+  tasks:
+  - name: install packages
+    yum: name={{ item }} state=latest 
+    with_items:
+      - bind
+      - bind-utils
+#      - ntp
+
+  - name: copy transferkey to all servers and the client
+    copy: src=named.zonetransfer.key dest=/etc/named.zonetransfer.key owner=root group=named mode=0644
+
+- hosts: ns01
+  become: yes
+  tasks:
+  - name: copy named.conf
+    copy: src=master-named.conf dest=/etc/named.conf owner=root group=named mode=0640
+  - name: copy zones
+    copy: src={{ item }} dest=/etc/named/ owner=root group=named mode=0660
+    with_fileglob:
+      - named.d*
+  - name: copy resolv.conf to the servers
+    copy: src=servers-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+  
+  - name: set /etc/named permissions
+    file: path=/etc/named owner=root group=named mode=0670
+
+  - name: ensure named is running and enabled
+    service: name=named state=restarted enabled=yes
+
+- hosts: ns02
+  become: yes
+  tasks:
+  - name: copy named.conf
+    copy: src=slave-named.conf dest=/etc/named.conf owner=root group=named mode=0640
+  - name: copy resolv.conf to the servers
+    copy: src=servers-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+
+  - name: set /etc/named permissions
+    file: path=/etc/named owner=root group=named mode=0670
+
+  - name: ensure named is running and enabled
+    service: name=named state=restarted enabled=yes
+    
+- hosts: client, client2
+  become: yes
+  tasks:
+  - name: copy resolv.conf to the client
+    copy: src=client-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+  - name: copy rndc conf file
+    copy: src=rndc.conf dest=/home/vagrant/rndc.conf owner=vagrant group=vagrant mode=0644
+  - name: copy motd to the client
+    copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644
+```
+
+После запуска ВМ успешно создаются и конфигурируются:
+
+**ПРИМЕЧАНИЕ:** по логу оказалось, что не нужно формировать вручную inventory файл для ansible - vagrant формирует его сам:
+
+```
+[admin_insta11@mv334 vagrant-bind]$ cat /home/admin_insta11/vagrant-bind/.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory
+# Generated by Vagrant
+
+ns02 ansible_host=127.0.0.1 ansible_port=2200 ansible_user='vagrant' ansible_ssh_private_key_file='/home/admin_insta11/vagrant-bind/.vagrant/machines/ns02/virtualbox/private_key'
+client2 ansible_host=127.0.0.1 ansible_port=2202 ansible_user='vagrant' ansible_ssh_private_key_file='/home/admin_insta11/vagrant-bind/.vagrant/machines/client2/virtualbox/private_key'
+client ansible_host=127.0.0.1 ansible_port=2201 ansible_user='vagrant' ansible_ssh_private_key_file='/home/admin_insta11/vagrant-bind/.vagrant/machines/client/virtualbox/private_key'
+ns01 ansible_host=127.0.0.1 ansible_port=2222 ansible_user='vagrant' ansible_ssh_private_key_file='/home/admin_insta11/vagrant-bind/.vagrant/machines/ns01/virtualbox/private_key'
+```
+
+```
+
+```
