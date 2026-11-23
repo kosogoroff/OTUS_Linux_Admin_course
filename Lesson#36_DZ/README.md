@@ -4261,3 +4261,135 @@ client2-key.		0	ANY	TSIG	hmac-sha256. 1795448238 300 32 C9O/CRo2AFM8Fwy+KiCv0RKq
 
 По ссылке https://github.com/kosogoroff/vagrant-bind.git
 выложен репозиторий для создания лабораторного стенда со сконфигурированным Split-DNS.
+
+ansible playbook также приведён ниже:
+
+```
+[admin_insta11@mv334 vagrant-bind]$ tree
+.
+├── provisioning
+│   ├── client-motd
+│   ├── client-resolv.conf
+│   ├── master-named.conf
+│   ├── named.ddns.lab
+│   ├── named.dns.lab
+│   ├── named.dns.lab.rev
+│   ├── named.newdns.lab
+│   ├── named.zonetransfer.key
+│   ├── playbook.yml
+│   ├── rndc.conf
+│   ├── servers-resolv.conf.j2
+│   ├── slave-named.conf
+│   └── zonetransfer.key
+├── README.md
+└── Vagrantfile
+
+1 directory, 15 files
+[admin_insta11@mv334 vagrant-bind]$ 
+[admin_insta11@mv334 vagrant-bind]$ cat Vagrantfile 
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+BOX_NAME = ENV['VAGRANT_BOX'] || 'centos/7'
+
+Vagrant.configure(2) do |config|
+  config.vm.box = BOX_NAME
+
+  config.vm.provision "ansible" do |ansible|
+    ansible.verbose = "vvv"
+    ansible.playbook = "provisioning/playbook.yml"
+    ansible.become = "true"
+  end
+
+
+  config.vm.provider "virtualbox" do |v|
+	  v.memory = 1024
+  end
+
+  config.vm.define "ns01" do |ns01|
+    ns01.vm.network "private_network", ip: "192.168.50.10", virtualbox__intnet: "dns"
+    ns01.vm.hostname = "ns01"
+  end
+
+  config.vm.define "ns02" do |ns02|
+    ns02.vm.network "private_network", ip: "192.168.50.11", virtualbox__intnet: "dns"
+    ns02.vm.hostname = "ns02"
+  end
+
+  config.vm.define "client" do |client|
+    client.vm.network "private_network", ip: "192.168.50.15", virtualbox__intnet: "dns"
+    client.vm.hostname = "client"
+  end
+
+  config.vm.define "client2" do |client2|
+    client2.vm.network "private_network", ip: "192.168.50.16", virtualbox__intnet: "dns"
+    client2.vm.hostname = "client2"
+  end
+
+
+end
+[admin_insta11@mv334 vagrant-bind]$ 
+[admin_insta11@mv334 vagrant-bind]$ cat provisioning/playbook.yml 
+---
+- hosts: all
+  become: yes
+  tasks:
+  - name: install packages
+    yum: name={{ item }} state=latest 
+    with_items:
+      - bind
+      - bind-utils
+#      - ntp
+
+  - name: copy transferkey to all servers and the client
+    copy: src=named.zonetransfer.key dest=/etc/named.zonetransfer.key owner=root group=named mode=0644
+
+- hosts: ns01
+  become: yes
+  tasks:
+  - name: copy named.conf
+    copy: src=master-named.conf dest=/etc/named.conf owner=root group=named mode=0640
+  - name: copy zones
+    copy: src={{ item }} dest=/etc/named/ owner=root group=named mode=0660
+    with_fileglob:
+      - named.d*
+      - named.newdns.lab
+  - name: copy resolv.conf to the servers
+    template: 
+      src: servers-resolv.conf.j2 
+      dest: /etc/resolv.conf 
+      owner: root 
+      group: root
+      mode: 0644
+
+  - name: set /etc/named permissions
+    file: path=/etc/named owner=root group=named mode=0670
+
+  - name: ensure named is running and enabled
+    service: name=named state=restarted enabled=yes
+
+- hosts: ns02
+  become: yes
+  tasks:
+  - name: copy named.conf
+    copy: src=slave-named.conf dest=/etc/named.conf owner=root group=named mode=0640
+  - name: copy resolv.conf to the servers
+    copy: src=servers-resolv.conf.j2 dest=/etc/resolv.conf owner=root group=root mode=0644
+
+  - name: set /etc/named permissions
+    file: path=/etc/named owner=root group=named mode=0670
+
+  - name: ensure named is running and enabled
+    service: name=named state=restarted enabled=yes
+    
+- hosts: client, client2
+  become: yes
+  tasks:
+  - name: copy resolv.conf to the client
+    copy: src=client-resolv.conf dest=/etc/resolv.conf owner=root group=root mode=0644
+  - name: copy rndc conf file
+    copy: src=rndc.conf dest=/home/vagrant/rndc.conf owner=vagrant group=vagrant mode=0644
+  - name: copy motd to the client
+    copy: src=client-motd dest=/etc/motd owner=root group=root mode=0644
+[admin_insta11@mv334 vagrant-bind]$ 
+
+```
