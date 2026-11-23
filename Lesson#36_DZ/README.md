@@ -3636,7 +3636,7 @@ web2            IN      A       192.168.50.16
 [vagrant@ns01 ~]$ 
 ```
 
-Для обращаемся с client и client2 к DNS-серверам утилитой dig с параметрами по умолчанию:
+Для проверки обращаемся с client и client2 к DNS-серверам утилитой dig с параметрами по умолчанию:
 
 С ВМ client:
 
@@ -3729,7 +3729,7 @@ web1.dns.lab.		3600	IN	A	192.168.50.15
 
 ## 2. Настраиваем split-dns
 
-Для этого создаём дополнительный файл зоны named.dns.lab.client (в нём отсутсвует определение сервера www2 ):
+Для этого создаём дополнительный файл зоны named.dns.lab.client (в нём отсутствует определение сервера www2 ):
 
 ```
 [vagrant@ns01 ~]$ sudo cat > /etc/named/named.dns.lab
@@ -3796,6 +3796,13 @@ key "tsig-key" {
 ```
 
 Изменяем файл /etc/named.conf на следующее содержание со сконфигурированными view для различных acl :
+
+В данном блоке access листов мы выделяем 2 блока: 
+
+-  client имеет адрес 192.168.50.15, использует client-key и не использует client2-key
+
+-  client2 имеет адрес 192ю168.50.16, использует clinet2-key и не использует client-key
+
 
 ```
 vagrant@ns01 ~]$ sudo cat /etc/named.conf
@@ -4086,7 +4093,9 @@ rtt min/avg/max/mdev = 0.086/0.182/0.354/0.121 ms
 view, acl и зонами в конфигурации Split-DNS:
 
 - клиент client с IP-адресом 192.168.50.15 видит зону dns.lab из файла /etc/named/named.dns.lab.client (в нём присутствуют только сервер web1)
+
 - клиент client2 с IP-адресом 192.168.50.16 видит зону dns.lab из файла /etc/named/named.dns.lab (в нём присутствуют оба сервера web1 и web2)
+ 
 ```
 // Указание Access листов 
 acl client { !key client2-key; key client-key; 192.168.50.15; };
