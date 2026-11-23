@@ -3488,4 +3488,776 @@ VM, run `vagrant status NAME`.
 ```
 
 
-1. 
+На созданных ВМ проверяем синхронизацию времени и статус существующего сервиса chronyd на обоих серверах ns01 и ns02:
+
+```
+[vagrant@ns01 ~]$ systemctl status chronyd
+● chronyd.service - NTP client/server
+     Loaded: loaded (/usr/lib/systemd/system/chronyd.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2026-11-23 11:23:35 UTC; 4h 31min ago
+       Docs: man:chronyd(8)
+             man:chrony.conf(5)
+   Main PID: 723 (chronyd)
+      Tasks: 1 (limit: 5464)
+     Memory: 5.0M (peak: 5.5M)
+        CPU: 258ms
+     CGroup: /system.slice/chronyd.service
+             └─723 /usr/sbin/chronyd -F 2
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ timedatectl status
+               Local time: Mon 2026-11-23 15:55:18 UTC
+           Universal time: Mon 2026-11-23 15:55:18 UTC
+                 RTC time: Mon 2026-11-23 15:55:17
+                Time zone: UTC (UTC, +0000)
+System clock synchronized: yes
+              NTP service: active
+          RTC in local TZ: no
+[vagrant@ns01 ~]$
+
+[vagrant@ns02 ~]$ systemctl status chronyd
+● chronyd.service - NTP client/server
+     Loaded: loaded (/usr/lib/systemd/system/chronyd.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2026-11-23 11:27:10 UTC; 4h 28min ago
+       Docs: man:chronyd(8)
+             man:chrony.conf(5)
+   Main PID: 723 (chronyd)
+      Tasks: 1 (limit: 5464)
+     Memory: 5.0M (peak: 5.3M)
+        CPU: 235ms
+     CGroup: /system.slice/chronyd.service
+             └─723 /usr/sbin/chronyd -F 2
+[vagrant@ns02 ~]$ 
+[vagrant@ns02 ~]$ timedatectl status
+               Local time: Mon 2026-11-23 15:55:51 UTC
+           Universal time: Mon 2026-11-23 15:55:51 UTC
+                 RTC time: Mon 2026-11-23 15:55:51
+                Time zone: UTC (UTC, +0000)
+System clock synchronized: yes
+              NTP service: active
+          RTC in local TZ: no
+[vagrant@ns02 ~]$
+
+```
+
+Проверяем, на каких портах работают наши DNS-сервера:
+
+```
+[vagrant@ns01 ~]$ sudo ss -tulpn
+Netid        State         Recv-Q         Send-Q                 Local Address:Port                 Peer Address:Port        Process                                                          
+udp          UNCONN        0              0                      192.168.50.10:53                        0.0.0.0:*            users:(("named",pid=9401,fd=21))                                
+udp          UNCONN        0              0                            0.0.0.0:111                       0.0.0.0:*            users:(("rpcbind",pid=669,fd=5),("systemd",pid=1,fd=49))        
+udp          UNCONN        0              0                          127.0.0.1:323                       0.0.0.0:*            users:(("chronyd",pid=723,fd=5))                                
+udp          UNCONN        0              0                              [::1]:53                           [::]:*            users:(("named",pid=9401,fd=24))                                
+udp          UNCONN        0              0                               [::]:111                          [::]:*            users:(("rpcbind",pid=669,fd=7),("systemd",pid=1,fd=51))        
+udp          UNCONN        0              0                              [::1]:323                          [::]:*            users:(("chronyd",pid=723,fd=6))                                
+tcp          LISTEN        0              10                     192.168.50.10:53                        0.0.0.0:*            users:(("named",pid=9401,fd=22))                                
+tcp          LISTEN        0              128                          0.0.0.0:22                        0.0.0.0:*            users:(("sshd",pid=1186,fd=7))                                  
+tcp          LISTEN        0              4096                         0.0.0.0:111                       0.0.0.0:*            users:(("rpcbind",pid=669,fd=4),("systemd",pid=1,fd=48))        
+tcp          LISTEN        0              4096                   192.168.50.10:953                       0.0.0.0:*            users:(("named",pid=9401,fd=26))                                
+tcp          LISTEN        0              128                             [::]:22                           [::]:*            users:(("sshd",pid=1186,fd=8))                                  
+tcp          LISTEN        0              4096                            [::]:111                          [::]:*            users:(("rpcbind",pid=669,fd=6),("systemd",pid=1,fd=50))        
+tcp          LISTEN        0              10                             [::1]:53                           [::]:*            users:(("named",pid=9401,fd=25))                                
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ sudo ss -tulpn | grep :53
+udp   UNCONN 0      0      192.168.50.10:53        0.0.0.0:*    users:(("named",pid=9401,fd=21))                        
+udp   UNCONN 0      0              [::1]:53           [::]:*    users:(("named",pid=9401,fd=24))                        
+tcp   LISTEN 0      10     192.168.50.10:53        0.0.0.0:*    users:(("named",pid=9401,fd=22))                        
+tcp   LISTEN 0      10             [::1]:53           [::]:*    users:(("named",pid=9401,fd=25))                        
+[vagrant@ns01 ~]$ 
+
+
+[vagrant@ns02 ~]$ sudo ss -tulpn
+Netid        State         Recv-Q         Send-Q                 Local Address:Port                 Peer Address:Port        Process                                                          
+udp          UNCONN        0              0                          127.0.0.1:323                       0.0.0.0:*            users:(("chronyd",pid=723,fd=5))                                
+udp          UNCONN        0              0                      192.168.50.11:53                        0.0.0.0:*            users:(("named",pid=8875,fd=21))                                
+udp          UNCONN        0              0                            0.0.0.0:111                       0.0.0.0:*            users:(("rpcbind",pid=669,fd=5),("systemd",pid=1,fd=48))        
+udp          UNCONN        0              0                              [::1]:323                          [::]:*            users:(("chronyd",pid=723,fd=6))                                
+udp          UNCONN        0              0                              [::1]:53                           [::]:*            users:(("named",pid=8875,fd=24))                                
+udp          UNCONN        0              0                               [::]:111                          [::]:*            users:(("rpcbind",pid=669,fd=7),("systemd",pid=1,fd=50))        
+tcp          LISTEN        0              10                     192.168.50.11:53                        0.0.0.0:*            users:(("named",pid=8875,fd=22))                                
+tcp          LISTEN        0              4096                   192.168.50.11:953                       0.0.0.0:*            users:(("named",pid=8875,fd=26))                                
+tcp          LISTEN        0              128                          0.0.0.0:22                        0.0.0.0:*            users:(("sshd",pid=1186,fd=7))                                  
+tcp          LISTEN        0              4096                         0.0.0.0:111                       0.0.0.0:*            users:(("rpcbind",pid=669,fd=4),("systemd",pid=1,fd=47))        
+tcp          LISTEN        0              10                             [::1]:53                           [::]:*            users:(("named",pid=8875,fd=25))                                
+tcp          LISTEN        0              128                             [::]:22                           [::]:*            users:(("sshd",pid=1186,fd=8))                                  
+tcp          LISTEN        0              4096                            [::]:111                          [::]:*            users:(("rpcbind",pid=669,fd=6),("systemd",pid=1,fd=49))        
+[vagrant@ns02 ~]$ 
+[vagrant@ns02 ~]$ sudo ss -tulpn | grep :53
+udp   UNCONN 0      0      192.168.50.11:53        0.0.0.0:*    users:(("named",pid=8875,fd=21))                        
+udp   UNCONN 0      0              [::1]:53           [::]:*    users:(("named",pid=8875,fd=24))                        
+tcp   LISTEN 0      10     192.168.50.11:53        0.0.0.0:*    users:(("named",pid=8875,fd=22))                        
+tcp   LISTEN 0      10             [::1]:53           [::]:*    users:(("named",pid=8875,fd=25))                        
+[vagrant@ns02 ~]$ 
+```
+
+Корректируем файл /etc/resolv.conf на обоих клиентах, чтобы каждый из них работал со своим DNS сервером:
+
+```
+[vagrant@ns01 ~]$ cat /etc/resolv.conf 
+domain dns.lab
+search dns.lab
+nameserver 192.168.50.10
+[vagrant@ns01 ~]$ 
+
+
+[vagrant@ns02 ~]$ cat /etc/resolv.conf 
+domain dns.lab
+search dns.lab
+nameserver 192.168.50.11
+[vagrant@ns02 ~]$ 
+```
+
+Добавляем в зону сервера web1 и web2, увеличиваем serial на +1, чтобы DNS восприняли внесённые изменения в зону :
+
+```
+[vagrant@ns01 ~]$ sudo cat /etc/named/named.dns.lab
+$TTL 3600
+$ORIGIN dns.lab.
+@               IN      SOA     ns01.dns.lab. root.dns.lab. (
+                            2711201408 ; serial
+                            3600       ; refresh (1 hour)
+                            600        ; retry (10 minutes)
+                            86400      ; expire (1 day)
+                            600        ; minimum (10 minutes)
+                        )
+
+                IN      NS      ns01.dns.lab.
+                IN      NS      ns02.dns.lab.
+
+; DNS Servers
+ns01            IN      A       192.168.50.10
+ns02            IN      A       192.168.50.11
+;Web
+web1            IN      A       192.168.50.15
+web2            IN      A       192.168.50.16
+
+[vagrant@ns01 ~]$ 
+```
+
+Для обращаемся с client и client2 к DNS-серверам утилитой dig с параметрами по умолчанию:
+
+С ВМ client:
+
+```
+[vagrant@client ~]$ dig web1.dns.lab
+
+; <<>> DiG 9.16.50-RH <<>> web1.dns.lab
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 57554
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+; COOKIE: b1948a5c8e080a98010000006b0465a25b527ae29b4b6f96 (good)
+;; QUESTION SECTION:
+;web1.dns.lab.			IN	A
+
+;; ANSWER SECTION:
+web1.dns.lab.		3600	IN	A	192.168.50.15
+
+;; Query time: 0 msec
+;; SERVER: 192.168.50.10#53(192.168.50.10)
+;; WHEN: Mon Nov 23 16:11:14 UTC 2026
+;; MSG SIZE  rcvd: 85
+
+[vagrant@client ~]$ 
+
+```
+
+С ВМ client2:
+
+```
+[vagrant@client2 ~]$ dig web1.dns.lab
+
+; <<>> DiG 9.16.50-RH <<>> web1.dns.lab
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 17664
+;; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+; COOKIE: 6c62673b549780ab010000006b0465faec275345887e44f5 (good)
+;; QUESTION SECTION:
+;web1.dns.lab.			IN	A
+
+;; AUTHORITY SECTION:
+.			10800	IN	SOA	a.root-servers.net. nstld.verisign-grs.com. 2026112300 1800 900 604800 86400
+
+;; Query time: 2844 msec
+;; SERVER: 192.168.50.11#53(192.168.50.11)
+;; WHEN: Mon Nov 23 16:12:42 UTC 2026
+;; MSG SIZE  rcvd: 144
+
+[vagrant@client2 ~]$ 
+```
+
+В запросах видно, что с дефолтными параметрами утилита dig обращается с client к серверу ns01, а с client2 -  к серверу ns02.
+
+Для явного указания DNS-сервера нужно указывать его адрес в качестве параметра, например, чтобы с client2 обратиться к серверу ns01:
+
+```
+[vagrant@client2 ~]$ dig @192.168.50.10 web1.dns.lab
+
+; <<>> DiG 9.16.50-RH <<>> @192.168.50.10 web1.dns.lab
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 28272
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+; COOKIE: a807df3a31fffedf010000006b04677e80c90720575a0a26 (good)
+;; QUESTION SECTION:
+;web1.dns.lab.			IN	A
+
+;; ANSWER SECTION:
+web1.dns.lab.		3600	IN	A	192.168.50.15
+
+;; Query time: 1 msec
+;; SERVER: 192.168.50.10#53(192.168.50.10)
+;; WHEN: Mon Nov 23 16:19:10 UTC 2026
+;; MSG SIZE  rcvd: 85
+
+[vagrant@client2 ~]$ 
+```
+
+
+## 2. Настраиваем split-dns
+
+Для этого создаём дополнительный файл зоны named.dns.lab.client (в нём отсутсвует определение сервера www2 ):
+
+```
+[vagrant@ns01 ~]$ sudo cat > /etc/named/named.dns.lab
+$TTL 3600
+$ORIGIN newdns.lab.
+@               IN      SOA     ns01.dns.lab. root.dns.lab. (
+                            2711201008 ; serial
+                            3600       ; refresh (1 hour)
+                            600        ; retry (10 minutes)
+                            86400      ; expire (1 day)
+                            600        ; minimum (10 minutes)
+                        )
+
+                IN      NS      ns01.dns.lab.
+                IN      NS      ns02.dns.lab.
+
+; DNS Servers
+ns01            IN      A       192.168.50.10
+ns02            IN      A       192.168.50.11
+
+;WWW
+www             IN      A       192.168.50.15
+www             IN      A       192.168.50.16
+[vagrant@ns01 ~]$
+[vagrant@ns01 ~]$ sudo cat /etc/named/named.dns.lab.client
+$TTL 3600
+$ORIGIN dns.lab.
+@               IN      SOA     ns01.dns.lab. root.dns.lab. (
+                            2711201407 ; serial
+                            3600       ; refresh (1 hour)
+                            600        ; retry (10 minutes)
+                            86400      ; expire (1 day)
+                            600        ; minimum (10 minutes)
+                        )
+
+                IN      NS      ns01.dns.lab.
+                IN      NS      ns02.dns.lab.
+
+; DNS Servers
+ns01            IN      A       192.168.50.10
+ns02            IN      A       192.168.50.11
+
+;Web
+web1            IN      A       192.168.50.15
+
+[vagrant@ns01 ~]$ 
+```
+
+Генерируем два ключа TSIG:
+
+```
+[vagrant@ns01 ~]$ tsig-keygen
+key "tsig-key" {
+    algorithm hmac-sha256;
+    secret "IQg171Ht4mdGYcjjYKhI9gSc1fhoxzHZB+h2NMtyZWY=";
+};
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ tsig-keygen
+key "tsig-key" {
+    algorithm hmac-sha256;
+    secret "m7r7SpZ9KBcA4kOl1JHQQnUiIlpQA1IJ9xkBHwdRAHc=";
+};
+[vagrant@ns01 ~]$
+```
+
+Изменяем файл /etc/named.conf на следующее содержание со сконфигурированными view для различных acl :
+
+```
+vagrant@ns01 ~]$ sudo cat /etc/named.conf
+options {
+
+    // На каком порту и IP-адресе будет работать служба 
+	listen-on port 53 { 192.168.50.10; };
+	listen-on-v6 port 53 { ::1; };
+
+    // Указание каталогов с конфигурационными файлами
+	directory 	"/var/named";
+	dump-file 	"/var/named/data/cache_dump.db";
+	statistics-file "/var/named/data/named_stats.txt";
+	memstatistics-file "/var/named/data/named_mem_stats.txt";
+
+    // Указание настроек DNS-сервера
+    // Разрешаем серверу быть рекурсивным
+	recursion yes;
+    // Указываем сети, которым разрешено отправлять запросы серверу
+	allow-query     { any; };
+    // Каким сетям можно передавать настройки о зоне
+    allow-transfer { any; };
+    
+    // dnssec
+//	dnssec-enable yes;
+	dnssec-validation yes;
+
+    // others
+	bindkeys-file "/etc/named.iscdlv.key";
+	managed-keys-directory "/var/named/dynamic";
+	pid-file "/run/named/named.pid";
+	session-keyfile "/run/named/session.key";
+};
+
+logging {
+        channel default_debug {
+                file "data/named.run";
+                severity dynamic;
+        };
+};
+
+// RNDC Control for client
+key "rndc-key" {
+    algorithm hmac-md5;
+    secret "GrtiE9kz16GK+OKKU/qJvQ==";
+};
+controls {
+        inet 192.168.50.10 allow { 192.168.50.15; 192.168.50.16; } keys { "rndc-key"; }; 
+};
+
+key "client-key" {
+    algorithm hmac-sha256;
+    secret "IQg171Ht4mdGYcjjYKhI9gSc1fhoxzHZB+h2NMtyZWY=";
+};
+key "client2-key" {
+    algorithm hmac-sha256;
+    secret "m7r7SpZ9KBcA4kOl1JHQQnUiIlpQA1IJ9xkBHwdRAHc=";
+};
+
+// ZONE TRANSFER WITH TSIG
+include "/etc/named.zonetransfer.key"; 
+
+server 192.168.50.11 {
+    keys { "zonetransfer.key"; };
+};
+// Указание Access листов 
+acl client { !key client2-key; key client-key; 192.168.50.15; };
+acl client2 { !key client-key; key client2-key; 192.168.50.16; };
+// Настройка первого view 
+view "client" {
+    // Кому из клиентов разрешено подключаться, нужно указать имя access-листа
+    match-clients { client; };
+
+    // Описание зоны dns.lab для client
+    zone "dns.lab" {
+        // Тип сервера — мастер
+        type master;
+        // Добавляем ссылку на файл зоны, который создали в прошлом пункте
+        file "/etc/named/named.dns.lab.client";
+        // Адрес хостов, которым будет отправлена информация об изменении зоны
+        also-notify { 192.168.50.11 key client-key; };
+    };
+
+    // newdns.lab zone
+    zone "newdns.lab" {
+        type master;
+        file "/etc/named/named.newdns.lab";
+        also-notify { 192.168.50.11 key client-key; };
+    };
+};
+
+// Описание view для client2
+view "client2" {
+    match-clients { client2; };
+
+    // dns.lab zone
+    zone "dns.lab" {
+        type master;
+        file "/etc/named/named.dns.lab";
+        also-notify { 192.168.50.11 key client2-key; };
+    };
+
+    // dns.lab zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        type master;
+        file "/etc/named/named.dns.lab.rev";
+        also-notify { 192.168.50.11 key client2-key; };
+    };
+};
+
+// Зона any, указана в файле самой последней
+view "default" {
+    match-clients { any; };
+
+    // root zone
+    zone "." IN {
+        type hint;
+        file "named.ca";
+    };
+
+    // zones like localhost
+    include "/etc/named.rfc1912.zones";
+    // root DNSKEY
+    include "/etc/named.root.key";
+
+    // dns.lab zone
+    zone "dns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.dns.lab";
+    };
+
+    // dns.lab zone reverse
+    zone "50.168.192.in-addr.arpa" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.dns.lab.rev";
+    };
+
+    // ddns.lab zone
+    zone "ddns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        allow-update { key "zonetransfer.key"; };
+        file "/etc/named/named.ddns.lab";
+    };
+
+    // newdns.lab zone
+    zone "newdns.lab" {
+        type master;
+        allow-transfer { key "zonetransfer.key"; };
+        file "/etc/named/named.newdns.lab";
+    };
+};
+
+[vagrant@ns01 ~]$
+[vagrant@ns01 ~]$ sudo chown root:named /etc/named/named.dns.lab.client
+[vagrant@ns01 ~]$ sudo chown root:named /etc/named/named.dns.lab
+[vagrant@ns01 ~]$ sudo chmod 660 /etc/named/named.dns.lab.client
+[vagrant@ns01 ~]$ sudo chmod 660 /etc/named/named.dns.lab
+[vagrant@ns01 ~]$ 
+[vagrant@ns01 ~]$ sudo ls -l /etc/named/
+total 20
+-rw-rw----. 1 root named 600 Nov 23 11:26 named.ddns.lab
+-rw-rw----. 1 root named 697 Nov 23 13:24 named.dns.lab
+-rw-rw----. 1 root named 652 Nov 23 13:48 named.dns.lab.client
+-rw-rw----. 1 root named 625 Nov 23 11:26 named.dns.lab.rev
+-rw-rw----. 1 root named 700 Nov 23 13:37 named.newdns.lab
+[vagrant@ns01 ~]$
+[vagrant@ns01 ~]$ sudo systemctl restart named
+[vagrant@ns01 ~]$ 
+```
+
+## 3. Проверка работы Split-DNS
+
+3.1 Первая проверка заключается в проверки работы acl в зависимости от IP-адресов обращающихся к нему клиентов.
+
+Проверяем разрешение имён хостов ns01, ns02, web1 и web2 с клиента client (IP-адрес 192.168.50.15)
+```
+[vagrant@client ~]$ ip a | grep inet
+    inet 127.0.0.1/8 scope host lo
+    inet6 ::1/128 scope host 
+    inet 10.0.2.15/24 brd 10.0.2.255 scope global dynamic noprefixroute eth0
+    inet6 fd17:625c:f037:2:2079:cbe7:fae3:3756/64 scope global dynamic noprefixroute 
+    inet6 fe80::5348:2850:35cd:1607/64 scope link noprefixroute 
+    inet 192.168.50.15/24 brd 192.168.50.255 scope global noprefixroute eth1
+    inet6 fe80::a00:27ff:fe20:9045/64 scope link 
+[vagrant@client ~]$ ping 192.168.50.10
+PING 192.168.50.10 (192.168.50.10) 56(84) bytes of data.
+64 bytes from 192.168.50.10: icmp_seq=1 ttl=64 time=0.931 ms
+64 bytes from 192.168.50.10: icmp_seq=2 ttl=64 time=1.10 ms
+^C
+--- 192.168.50.10 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1006ms
+rtt min/avg/max/mdev = 0.931/1.015/1.099/0.084 ms
+[vagrant@client ~]$ 
+[vagrant@client ~]$ ping ns01.dns.lab
+PING ns01.dns.lab (192.168.50.10) 56(84) bytes of data.
+64 bytes from 192.168.50.10 (192.168.50.10): icmp_seq=1 ttl=64 time=0.689 ms
+64 bytes from 192.168.50.10 (192.168.50.10): icmp_seq=2 ttl=64 time=1.13 ms
+64 bytes from 192.168.50.10 (192.168.50.10): icmp_seq=3 ttl=64 time=1.14 ms
+^C
+--- ns01.dns.lab ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2012ms
+rtt min/avg/max/mdev = 0.689/0.987/1.139/0.210 ms
+[vagrant@client ~]$
+[vagrant@client ~]$ ping ns02.dns.lab
+PING ns02.dns.lab (192.168.50.11) 56(84) bytes of data.
+64 bytes from 192.168.50.11 (192.168.50.11): icmp_seq=1 ttl=64 time=0.743 ms
+64 bytes from 192.168.50.11 (192.168.50.11): icmp_seq=2 ttl=64 time=1.14 ms
+^C
+--- ns02.dns.lab ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1006ms
+rtt min/avg/max/mdev = 0.743/0.942/1.142/0.199 ms
+[vagrant@client ~]$
+[vagrant@client ~]$ ping web1.dns.lab
+PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
+64 bytes from client (192.168.50.15): icmp_seq=1 ttl=64 time=0.043 ms
+64 bytes from client (192.168.50.15): icmp_seq=2 ttl=64 time=0.185 ms
+64 bytes from client (192.168.50.15): icmp_seq=3 ttl=64 time=0.145 ms
+^C
+--- web1.dns.lab ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2012ms
+rtt min/avg/max/mdev = 0.043/0.124/0.185/0.059 ms
+[vagrant@client ~]$ ping web2.dns.lab
+ping: web2.dns.lab: Name or service not known
+[vagrant@client ~]$
+```
+
+Видно, что из четырёх запросов с client видны ns01, ns02, web1 ; при этом web2 не виден.
+
+Аналогично проверяем разрешение имён хостов ns01, ns02, web1 и web2 с клиента client2 (IP-адрес 192.168.50.16)
+```
+[vagrant@client2 ~]$ ip a | grep inet
+    inet 127.0.0.1/8 scope host lo
+    inet6 ::1/128 scope host 
+    inet 10.0.2.15/24 brd 10.0.2.255 scope global dynamic noprefixroute eth0
+    inet6 fd17:625c:f037:2:1196:dfd7:a9f8:f817/64 scope global dynamic noprefixroute 
+    inet6 fe80::2efa:4d63:34b4:80eb/64 scope link noprefixroute 
+    inet 192.168.50.16/24 brd 192.168.50.255 scope global noprefixroute eth1
+    inet6 fe80::a00:27ff:feb1:3534/64 scope link 
+[vagrant@client2 ~]$
+vagrant@client2 ~]$ ping ns01.dns.lab
+PING ns01.dns.lab (192.168.50.10) 56(84) bytes of data.
+64 bytes from ns01.dns.lab (192.168.50.10): icmp_seq=1 ttl=64 time=0.708 ms
+64 bytes from ns01.dns.lab (192.168.50.10): icmp_seq=2 ttl=64 time=1.18 ms
+64 bytes from ns01.dns.lab (192.168.50.10): icmp_seq=3 ttl=64 time=1.18 ms
+^C
+--- ns01.dns.lab ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2011ms
+rtt min/avg/max/mdev = 0.708/1.021/1.180/0.221 ms
+[vagrant@client2 ~]$ 
+[vagrant@client2 ~]$ ping ns02.dns.lab
+PING ns02.dns.lab (192.168.50.11) 56(84) bytes of data.
+64 bytes from ns02.dns.lab (192.168.50.11): icmp_seq=1 ttl=64 time=1.10 ms
+64 bytes from ns02.dns.lab (192.168.50.11): icmp_seq=2 ttl=64 time=1.28 ms
+64 bytes from ns02.dns.lab (192.168.50.11): icmp_seq=3 ttl=64 time=1.15 ms
+^C
+--- ns02.dns.lab ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2012ms
+rtt min/avg/max/mdev = 1.098/1.177/1.280/0.076 ms
+[vagrant@client2 ~]$ 
+[vagrant@client2 ~]$ ping www1.dns.lab
+ping: www1.dns.lab: Name or service not known
+[vagrant@client2 ~]$ ping web1.dns.lab
+PING web1.dns.lab (192.168.50.15) 56(84) bytes of data.
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=1 ttl=64 time=1.79 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=2 ttl=64 time=1.21 ms
+64 bytes from 192.168.50.15 (192.168.50.15): icmp_seq=3 ttl=64 time=1.10 ms
+^C
+--- web1.dns.lab ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2012ms
+rtt min/avg/max/mdev = 1.104/1.369/1.794/0.303 ms
+[vagrant@client2 ~]$ ping web2.dns.lab
+PING web2.dns.lab (192.168.50.16) 56(84) bytes of data.
+64 bytes from client2 (192.168.50.16): icmp_seq=1 ttl=64 time=0.354 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=2 ttl=64 time=0.086 ms
+64 bytes from client2 (192.168.50.16): icmp_seq=3 ttl=64 time=0.107 ms
+^C
+--- web2.dns.lab ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2011ms
+rtt min/avg/max/mdev = 0.086/0.182/0.354/0.121 ms
+[vagrant@client2 ~]$
+
+```
+
+Видно, что из четырёх запросов с client видны все четыре ns01, ns02, web1, web2 - в соответствии со сконфигурированными
+view, acl и зонами в конфигурации Split-DNS:
+
+- клиент client с IP-адресом 192.168.50.15 видит зону dns.lab из файла /etc/named/named.dns.lab.client (в нём присутствуют только сервер web1)
+- клиент client2 с IP-адресом 192.168.50.16 видит зону dns.lab из файла /etc/named/named.dns.lab (в нём присутствуют оба сервера web1 и web2)
+```
+// Указание Access листов 
+acl client { !key client2-key; key client-key; 192.168.50.15; };
+acl client2 { !key client-key; key client2-key; 192.168.50.16; };
+// Настройка первого view 
+view "client" {
+    // Кому из клиентов разрешено подключаться, нужно указать имя access-листа
+    match-clients { client; };
+
+    // Описание зоны dns.lab для client
+    zone "dns.lab" {
+        <...>
+        file "/etc/named/named.dns.lab.client";
+        <...>
+    };
+
+    <...>
+};
+
+// Описание view для client2
+view "client2" {
+    match-clients { client2; };
+
+    // dns.lab zone
+    zone "dns.lab" {
+        <...>
+        file "/etc/named/named.dns.lab";
+        <...>
+    };
+
+    <...>
+};
+```
+
+Вывод: конфигурация Split-DNS работает в соответствии с IP-адресами отправителей запросов DNS.
+
+##### 3.2 Вторая проверка заключается в проверке работы acl в зависимости от наличия сконфигурированных TSIG-ключей у обращающихся к нему клиентов.
+
+В прошом тесте 3.1 хост client с IP-адресом 192.168.50.16 не видел хост web2 в зоне dns.lab исходя из сконфигурированного в acl IP-адреса.
+
+Для проверки доступа с использованием TSIG-ключей:
+
+копируем ранее сгенерированные и сконфигурированные в /etc/named.conf TSIG-ключи на ВМ client. и запускаем запросы
+утилитой dig с использованием TSIG-ключей client-key и client2-key:
+```
+[vagrant@client ~]$ cat client-key.key
+key "client-key" {
+    algorithm hmac-sha256;
+    secret "IQg171Ht4mdGYcjjYKhI9gSc1fhoxzHZB+h2NMtyZWY=";
+};
+[vagrant@client ~]$ 
+[vagrant@client ~]$ cat client2-key.key
+key "client2-key" {
+    algorithm hmac-sha256;
+    secret "m7r7SpZ9KBcA4kOl1JHQQnUiIlpQA1IJ9xkBHwdRAHc=";
+};
+[vagrant@client ~]$ 
+
+[vagrant@client ~]$ dig @192.168.50.10 -k client-key.key web1.dns.lab
+
+; <<>> DiG 9.16.50-RH <<>> @192.168.50.10 -k client-key.key web1.dns.lab
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 59752
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 2
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+; COOKIE: 6677277797359dd2010000006b045d819586b04908883ced (good)
+;; QUESTION SECTION:
+;web1.dns.lab.			IN	A
+
+;; ANSWER SECTION:
+web1.dns.lab.		3600	IN	A	192.168.50.15
+
+;; TSIG PSEUDOSECTION:
+client-key.		0	ANY	TSIG	hmac-sha256. 1795448193 300 32 uR0WR6cp6vD5lyf0gupLOp01vzVlaaJciCl45IanGss= 59752 NOERROR 0 
+
+;; Query time: 2 msec
+;; SERVER: 192.168.50.10#53(192.168.50.10)
+;; WHEN: Mon Nov 23 15:36:33 UTC 2026
+;; MSG SIZE  rcvd: 168
+
+[vagrant@client ~]$ 
+[vagrant@client ~]$ dig @192.168.50.10 -k client-key.key web2.dns.lab
+
+; <<>> DiG 9.16.50-RH <<>> @192.168.50.10 -k client-key.key web2.dns.lab
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 29727
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 2
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+; COOKIE: e114e23191f7e963010000006b045d90681f31bc2388f3e7 (good)
+;; QUESTION SECTION:
+;web2.dns.lab.			IN	A
+
+;; AUTHORITY SECTION:
+dns.lab.		600	IN	SOA	ns01.dns.lab. root.dns.lab. 2711201407 3600 600 86400 600
+
+;; TSIG PSEUDOSECTION:
+client-key.		0	ANY	TSIG	hmac-sha256. 1795448208 300 32 3YDbuV8T2biPKSUctZO8FLBYDbpI61IJDr8pxe/XAHM= 29727 NOERROR 0 
+
+;; Query time: 2 msec
+;; SERVER: 192.168.50.10#53(192.168.50.10)
+;; WHEN: Mon Nov 23 15:36:48 UTC 2026
+;; MSG SIZE  rcvd: 198
+
+[vagrant@client ~]$ 
+[vagrant@client ~]$ dig @192.168.50.10 -k client2-key.key web1.dns.lab
+
+; <<>> DiG 9.16.50-RH <<>> @192.168.50.10 -k client2-key.key web1.dns.lab
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 58039
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 2
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+; COOKIE: 5a87534c88dc8a71010000006b045da775391ab0980d1cf0 (good)
+;; QUESTION SECTION:
+;web1.dns.lab.			IN	A
+
+;; ANSWER SECTION:
+web1.dns.lab.		3600	IN	A	192.168.50.15
+
+;; TSIG PSEUDOSECTION:
+client2-key.		0	ANY	TSIG	hmac-sha256. 1795448231 300 32 s3qDCLd47INdF6ZTPpvXCQ0HmMW+NhOtBzexLkWmm48= 58039 NOERROR 0 
+
+;; Query time: 2 msec
+;; SERVER: 192.168.50.10#53(192.168.50.10)
+;; WHEN: Mon Nov 23 15:37:11 UTC 2026
+;; MSG SIZE  rcvd: 169
+
+[vagrant@client ~]$ dig @192.168.50.10 -k client2-key.key web2.dns.lab
+
+; <<>> DiG 9.16.50-RH <<>> @192.168.50.10 -k client2-key.key web2.dns.lab
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 43129
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 2
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 1232
+; COOKIE: fade563ca6a9f972010000006b045daea1a61c98b43c7885 (good)
+;; QUESTION SECTION:
+;web2.dns.lab.			IN	A
+
+;; ANSWER SECTION:
+web2.dns.lab.		3600	IN	A	192.168.50.16
+
+;; TSIG PSEUDOSECTION:
+client2-key.		0	ANY	TSIG	hmac-sha256. 1795448238 300 32 C9O/CRo2AFM8Fwy+KiCv0RKq0lQuIcOYjB+s0L2j4B4= 43129 NOERROR 0 
+
+;; Query time: 2 msec
+;; SERVER: 192.168.50.10#53(192.168.50.10)
+;; WHEN: Mon Nov 23 15:37:18 UTC 2026
+;; MSG SIZE  rcvd: 169
+
+[vagrant@client ~]$
+```
+
+В выводе видно, что при запросе с использованием TSIG-ключа client-key ВМ client видит только хост web1 в зоне dns.lab, но не видит хост web2.
+А при запросе с использованием TSIG-ключа client2-key ВМ client видит оба хоста web1 и web2 в зоне dns.lab.
+Это также соответствует конфигурации тех же acl в конфигурации /etc/named.conf сервера bind.
+
+
+## 4. Конфигурирование Split-DNS с помощью ansible
+
+По ссылке https://github.com/kosogoroff/vagrant-bind.git
+выложен репозиторий для создания лабораторного стенда со сконфигурированным Split-DNS.
