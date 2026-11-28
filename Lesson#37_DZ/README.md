@@ -33,4 +33,23 @@ testClient2 <-> testServer2
 
 <img width="777" height="751" alt="изображение" src="https://github.com/user-attachments/assets/c8cadbb2-525a-43bd-9dd8-84447cb97064" />
 
+Таблица IP-адресации интерфейсов хостов:
 
+
+| Server      | IP and netmask      | Interface       |
+|:---------------------------------------|:---------------|:-------------------------|
+| inetRouter     |  192.168.255.1/30                     | Bond0 (eth1,eth2)         |
+| centralRouter  | 192.168.255.2/30                      | Bond0 (eth1,eth2)         |       
+|                | 192.168.255.9/30                      | eth3                      |
+| office1Router  | 192.168.255.10/30                     | eth1                      |
+|                | -                                     | eth2         |
+|                | -                                     | eth3         |
+|                | -                                     | eth4         |
+|                | -                                     | eth5         |
+| testClient1    | 10.10.10.254/24                       | eth1         |
+| testServer1    | 10.10.10.1/24                       | eth1         |
+| testClient2    | 10.10.10.253/24                       | eth1         |
+| testServer2    | 10.10.10.2/24                       | eth1         |
+
+
+Vagrantfile для создания лабораторного стенда приведён ниже:
